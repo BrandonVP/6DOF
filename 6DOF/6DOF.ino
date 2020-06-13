@@ -22,19 +22,19 @@ actuator actuator_z2;
 
 
 // Actuator x1
-const uint8_t SPD_x1 = 3;  // Pulse
-const uint8_t DIR_x1 = 2;  // Direction
-const uint8_t ENA_x1 = 4;  // Enable
+const uint8_t SPD_x1 = 11;  // Pulse
+const uint8_t DIR_x1 = 12;  // Direction
+const uint8_t ENA_x1 = 13;  // Enable
 
 // Actuator y1
-const uint8_t SPD_y1 = 22;  // Pulse
-const uint8_t DIR_y1 = 24;  // Direction
-const uint8_t ENA_y1 = 26;  // Enable
+const uint8_t SPD_y1 = 10;  // Pulse
+const uint8_t DIR_y1 = 9;  // Direction
+const uint8_t ENA_y1 = 8;  // Enable
 
 // Actuator z1
-const uint8_t SPD_z1 = 28;  // Pulse
-const uint8_t DIR_z1 = 30;  // Direction
-const uint8_t ENA_z1 = 32;  // Enable
+const uint8_t SPD_z1 = 7;  // Pulse
+const uint8_t DIR_z1 = 6;  // Direction
+const uint8_t ENA_z1 = 5;  // Enable
 
 
 // Actuator x2
