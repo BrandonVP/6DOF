@@ -1,24 +1,20 @@
-// Declare actuator class used for each stepper motor
-class actuator {
-public:
-    uint8_t g_code;           // Set g_code mode for next cycle  
-    int current_angle;        // Angle of actuators position in degrees
-    int long steps_to_move;   // Set quantity of steps to move in next cycle
-    bool actuator_direction;  // Current direction of actuator
-    bool enable_actuator;     // Enable actuator to accept pulse
-    double actuator_speed;    // Set individual actuator speed
-};
+//#include <SdFat.h>
+//#include <SPI.h>
+//#include <SD.h>
+#include "Actuator.h"
+#include "Move.h"
+#include <stdint.h>
 
 
 // Declare each actuator as it's own object
 // Base x, y, z, 1
-actuator actuator_x1;
-actuator actuator_y1;
-actuator actuator_z1;
+Actuator actuator_x1;
+Actuator actuator_y1;
+Actuator actuator_z1;
 // Wrist x, y, z, 2
-actuator actuator_x2;
-actuator actuator_y2;
-actuator actuator_z2;
+Actuator actuator_x2;
+Actuator actuator_y2;
+Actuator actuator_z2;
 
 
 // Actuator x1
@@ -51,7 +47,7 @@ const uint8_t ENA_z2 = 53; // Motor
 const uint8_t SPD_z2 = 51; // Speed
 
 
-const uint8_t PULSE_SPEED = 40;           // Lower number produces higher RPM
+const uint8_t PULSE_SPEED = 36;           // Lower number produces higher RPM
 const uint8_t SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic which is approximately 18 ms
 const uint8_t SPEED_ADJUSTED_G1 = PULSE_SPEED - 30;         // SPEED_ADJUSTED compensates time used for CPU to run logic which is approximately 18 ms
 const uint8_t SPEED_ADJUSTED_G2 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic which is approximately 18 ms
@@ -74,9 +70,9 @@ void setup() {
     pinMode(ENA_z1, OUTPUT);
 
     // Temporary starting position to be replaces with calibration function
-    actuator_x1.current_angle = 0;
-    actuator_y1.current_angle = 0;
-    actuator_z1.current_angle = 180; // Start at 180
+    actuator_x1.get_current_angle();
+    actuator_y1.get_current_angle();
+    actuator_z1.get_current_angle(); // Start at 180
 }
 
 
@@ -174,11 +170,11 @@ void endf() {
 */
 void set_actuator_x1(int new_pos_x1) {
     // Set direction
-    if (new_pos_x1 < actuator_x1.current_angle) {
-        actuator_x1.actuator_direction = false;
+    if (new_pos_x1 < actuator_x1.get_current_angle()) {
+        actuator_x1.set_actuator_direction(false);
     }
     else {
-        actuator_x1.actuator_direction = true;
+        actuator_x1.set_actuator_direction(true);
     }
 
     // Calculate distance to move
@@ -189,14 +185,14 @@ void set_actuator_x1(int new_pos_x1) {
 
     // Enable is steps are greater than 0
     if (dis_to_move_x1 == 0) {
-        actuator_x1.enable_actuator = false;
+        actuator_x1.set_enable_actuator(false);
     }
     else {
-        actuator_x1.enable_actuator = true;
+        actuator_x1.set_enable_actuator(true);
     }
 
     // Set actuator to new current_angle
-    actuator_x1.current_angle = new_pos_x1;
+    actuator_x1.set_current_angle(new_pos_x1);
 }
 
 
@@ -289,7 +285,7 @@ void set_actuator_z1(int new_pos_z1) {
 ****************************************************
 */
 // Convert char input to array of movement commands for actuator
-int* convert_char(char input) {
+int convert_char(char input) {
     return;
 }
 
@@ -307,6 +303,22 @@ int* convert_char(char input) {
 */
 void calibrate_actuators() {
     // Create me!
+}
+
+
+/*
+****************************************************
+*   Function: calibrate_actuators()                *
+*    - Calibrates actuators to a default position  *
+*    - using limiting switch hardware              *
+*                                                  *
+*   Parameters: None                               *
+*                                                  *
+*   Returns: void                                  *
+****************************************************
+*/
+void read_in_gCode() {
+    
 }
 
 
@@ -355,6 +367,7 @@ void G1(void) {
             }
     */
 
+    // Idea, find actuator with greatest number of steps then change while to for loop
     while ((index < actuator_x1.steps_to_move) || (index < actuator_y1.steps_to_move) || (index < actuator_z1.steps_to_move)
         || (index < actuator_x2.steps_to_move) || (index < actuator_y2.steps_to_move) || (index < actuator_z2.steps_to_move))
     {
@@ -406,7 +419,7 @@ void G1(void) {
 ****************************************************
 */
 void G2(void) {
-    int step_array[NUMBER_OF_ACTUATORS] = { actuator_x1.steps_to_move, actuator_y1.steps_to_move, actuator_z1.steps_to_move, actuator_x2.steps_to_move, actuator_y2.steps_to_move, actuator_z2.steps_to_move };
+    int step_array[NUMBER_OF_ACTUATORS] = { actuator_x1.get_steps_to_move(), actuator_y1.get_steps_to_move(), actuator_z1.get_steps_to_move(), actuator_x2.get_steps_to_move(), actuator_y2.get_steps_to_move(), actuator_z2.get_steps_to_move() };
     int long index = 0;
     int greatest_value = step_array[0];
     for (int i = 1; i < NUMBER_OF_ACTUATORS; i++)
@@ -415,12 +428,12 @@ void G2(void) {
             greatest_value = step_array[i];
     }
     double k_constant = greatest_value * PULSE_SPEED;
-    actuator_x1.actuator_speed = k_constant / (step_array[0] * STEPS_PER_DEGREE);
-    actuator_y1.actuator_speed = k_constant / (step_array[1] * STEPS_PER_DEGREE);
-    actuator_z1.actuator_speed = k_constant / (step_array[2] * STEPS_PER_DEGREE);
-    actuator_x2.actuator_speed = k_constant / (step_array[3] * STEPS_PER_DEGREE);
-    actuator_y2.actuator_speed = k_constant / (step_array[4] * STEPS_PER_DEGREE);
-    actuator_z2.actuator_speed = k_constant / (step_array[5] * STEPS_PER_DEGREE);
+    actuator_x1.set_actuator_speed((k_constant / (step_array[0] * STEPS_PER_DEGREE)));
+    actuator_y1.set_actuator_speed((k_constant / (step_array[1] * STEPS_PER_DEGREE)));
+    actuator_z1.set_actuator_speed((k_constant / (step_array[2] * STEPS_PER_DEGREE)));
+    actuator_x2.set_actuator_speed((k_constant / (step_array[3] * STEPS_PER_DEGREE)));
+    actuator_y2.set_actuator_speed((k_constant / (step_array[4] * STEPS_PER_DEGREE)));
+    actuator_z2.set_actuator_speed((k_constant / (step_array[5] * STEPS_PER_DEGREE)));
 
 
     while (index < greatest_value) {

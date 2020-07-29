@@ -116,7 +116,16 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Actuator.h" />
+    <ClInclude Include="Move.h" />
     <ClInclude Include="__vm\.6DOF.vsarduino.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Actuator.cpp" />
+    <ClCompile Include="Move.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="sample.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
