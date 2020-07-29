@@ -1,3 +1,4 @@
+/*
 #pragma once
 #ifndef MOVE_H
 #define MOVE_H
@@ -11,4 +12,4 @@ public:
 
 };
 #endif
-
+*/
