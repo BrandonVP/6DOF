@@ -15,9 +15,10 @@ const int ENA_z1 = 5;  // Enable
 
 
 // Actuator x2
-const int DIR_x2 = 40;  // Direction
-const int ENA_x2 = 42; // Motor
-const int SPD_x2 = 44; // Speed
+const int SPD_x2 = 22;  // Pulse
+const int DIR_x2 = 23;  // Direction
+const int ENA_x2 = 24;  // Enable
+
 // Actuator y2
 const int DIR_y2 = 46; // Direction
 const int ENA_y2 = 48; // Motor

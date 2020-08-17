@@ -61,16 +61,9 @@ public:
 	}
 
 	int get_current_angle() {
-		if (current_angle) {
+
 			return current_angle;
-		}
-		else if (current_angle) { // If current angle is in txt file
-			//get current_angle from txt file
-			return current_angle;
-		}
-		else {
-			return;
-		}
+	
 	}
 
 	void set_steps_to_move(int long steps_to_move) {

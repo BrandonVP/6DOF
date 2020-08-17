@@ -30,6 +30,12 @@
     <ClInclude Include="Move.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="mcp_can.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp_can_dfs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Actuator.cpp">
@@ -41,9 +47,15 @@
     <ClCompile Include="PinAssignments.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mcp_can.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="sample.txt">
+      <Filter>Misc Files</Filter>
+    </Text>
+    <Text Include="save.txt">
       <Filter>Misc Files</Filter>
     </Text>
   </ItemGroup>
