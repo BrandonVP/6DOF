@@ -1,5 +1,9 @@
 #include <math.h>
 
+const int DRIVER_STEPS;
+const int STEPS_PER_ROTATION;
+const int ACTUATOR_GEAR_RATIO;
+const int DEGREES_IN_CIRCLE = 360;
 const double  STEPS_PER_DEGREE = 675.555; // (DRIVER_STEPS * STEPS_PER_ROTATION * ACTUATOR_GEAR_RATIO) / DEGREES_IN_CIRCLE = 675.555~
 
 using namespace std;

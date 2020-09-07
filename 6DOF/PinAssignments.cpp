@@ -20,10 +20,10 @@ const int DIR_x2 = 23;  // Direction
 const int ENA_x2 = 24;  // Enable
 
 // Actuator y2
-const int DIR_y2 = 46; // Direction
-const int ENA_y2 = 48; // Motor
-const int SPD_y2 = 50; // Speed
+const int DIR_y2 = 25; // Direction
+const int ENA_y2 = 26; // Motor
+const int SPD_y2 = 27; // Speed
 // Actuator z2
-const int DIR_z2 = 52; // Direction
-const int ENA_z2 = 53; // Motor
-const int SPD_z2 = 51; // Speed
+const int DIR_z2 = 28; // Direction
+const int ENA_z2 = 29; // Motor
+const int SPD_z2 = 30; // Speed
