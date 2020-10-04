@@ -35,7 +35,7 @@ const unsigned int rxId_send = 0x0C1;
 const unsigned int rxId_control = 0x0A0;
 const unsigned int rxId_lower = 0x0A1;
 const unsigned int rxId_upper = 0x0A2;
-const unsigned int rxId_manual = 0x0A3;
+const unsigned int rxId_manual = 0x0B3;
 INT8U len = 0;
 INT8U rxBuf[8];
 char msgString[128];                        // Array to store serial string
@@ -127,6 +127,7 @@ void setup() {
     Serial.println("MCP2515 Library Receive Example...");
     // End CANBus
 
+    /*
     // Start SD
     Serial.print("Initializing SD card...");
     if (!SD.begin(47)) {
@@ -137,6 +138,7 @@ void setup() {
         Serial.println("Note: press reset or reopen this serial monitor after fixing your issue!");
         //while (1);
     }
+    */
     Serial.println("initialization done.");
     // End SD
 
