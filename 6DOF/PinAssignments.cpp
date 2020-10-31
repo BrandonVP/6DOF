@@ -28,3 +28,7 @@ const int ENA_y2 = 22; // Motor
 const int SPD_z2 = 27; // Pulse
 const int DIR_z2 = 26; // Direction
 const int ENA_z2 = 35; // Motor
+
+// Grip Motor
+#define MOTOR_IN1 28
+#define MOTOR_IN2 29

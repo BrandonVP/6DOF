@@ -27,9 +27,6 @@
     <ClInclude Include="Actuator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Move.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="mcp_can.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -39,9 +36,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Actuator.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Move.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PinAssignments.cpp">

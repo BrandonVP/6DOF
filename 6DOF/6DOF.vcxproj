@@ -119,13 +119,11 @@
     <ClInclude Include="Actuator.h" />
     <ClInclude Include="mcp_can.h" />
     <ClInclude Include="mcp_can_dfs.h" />
-    <ClInclude Include="Move.h" />
     <ClInclude Include="__vm\.6DOF.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Actuator.cpp" />
     <ClCompile Include="mcp_can.cpp" />
-    <ClCompile Include="Move.cpp" />
     <ClCompile Include="PinAssignments.cpp" />
   </ItemGroup>
   <ItemGroup>
