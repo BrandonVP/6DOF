@@ -1,6 +1,6 @@
 //#include <SdFat.h>
-#include <SD.h>
-#include <stdint.h>
+//#include <SD.h>
+//#include <stdint.h>
 #include <SPI.h>
 #include "mcp_can.h"
 #include "PinAssignments.cpp"
@@ -8,14 +8,14 @@
 
 
 // Global settings
-const int PULSE_SPEED = 86;           // Lower number produces higher RPM
-const int SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic which is approximately 18 ms
-const int SPEED_ADJUSTED_G1 = PULSE_SPEED - 20;         // SPEED_ADJUSTED compensates time used for CPU to run logic which is approximately 18 ms
-const int SPEED_ADJUSTED_G2 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic which is approximately 18 ms
+const int PULSE_SPEED = 135;           // Lower number produces higher RPM
+const int SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
+const int SPEED_ADJUSTED_G1 = PULSE_SPEED - 24;         // SPEED_ADJUSTED compensates time used for CPU to run logic in G1 loop
+const int SPEED_ADJUSTED_G2 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
+//const int NUMBER_OF_ACTUATORS = 6;    
 
-const int NUMBER_OF_ACTUATORS = 6;    // Number of actuators in robot
-
-File myFile;
+// Should this be moved?
+//File myFile;
 
 // Actuator objects
 // Base x, y, z, 1
@@ -27,25 +27,32 @@ Actuator actuator_x2;
 Actuator actuator_y2;
 Actuator actuator_z2;
 
+#define ANGLE_ACCELERATION 100
+#define MANUAL_ACCELERATION 1
 
-// START CANBUS
-#define CAN0_INT 47                              // Set INT to pin 2
-const unsigned int rxId_send = 0x0C1;
-const unsigned int rxId_control = 0x0B0;
-const unsigned int rxId_lower = 0x0B1;
-const unsigned int rxId_upper = 0x0B2;
-const unsigned int rxId_manual = 0x0B3;
+// CAN Bus settings
+#define CAN0_INT 47      
+#define RXID_SEND 0x0C1
+#define RXID_CONTROL 0x0A0
+#define RXID_LOWER 0x0A1
+#define RXID_UPPER 0x0A2
+#define RX_MANUAL 0x0A3
 INT8U len = 0;
 INT8U rxBuf[8];
-char msgString[128];                        // Array to store serial string
-MCP_CAN CAN0(49);                               // Set CS to pin 49
+
+// CS Pin
+MCP_CAN CAN0(49);
+
+// Open grip is true
 bool isGrip = true;
 
+// Close grip profile
 void close_grip() {
+    uint8_t i;
     analogWrite(MOTOR_IN2, 0);
     analogWrite(MOTOR_IN1, 255);
     delay(1);
-    for (int i = 188; i >= 0; i--) {
+    for (i = 188; i >= 0; i--) {
         analogWrite(MOTOR_IN1, i);
         delay(6);
     }
@@ -53,6 +60,7 @@ void close_grip() {
     analogWrite(MOTOR_IN2, 0);
 }
 
+// Open grip profile
 void open_grip() {
     analogWrite(MOTOR_IN1, 0);
     analogWrite(MOTOR_IN2, 255);
@@ -65,96 +73,52 @@ void open_grip() {
     analogWrite(MOTOR_IN2, 0);
 }
 
-void demo1() {
-    actuator_x1.set_actuator(15);
-    actuator_y1.set_actuator(15);
-    actuator_z1.set_actuator(-15);
-    actuator_x2.set_actuator(7);
-    actuator_y2.set_actuator(7);
-    actuator_z2.set_actuator(7);
-    G1();
-    actuator_x1.set_actuator(-15);
-    actuator_y1.set_actuator(-15);
-    actuator_z1.set_actuator(15);
-    actuator_x2.set_actuator(-7);
-    actuator_y2.set_actuator(-7);
-    actuator_z2.set_actuator(-7);
-    G1();
-    actuator_x1.set_actuator(1);
-    actuator_y1.set_actuator(1);
-    actuator_z1.set_actuator(1);
-    actuator_x2.set_actuator(1);
-    actuator_y2.set_actuator(1);
-    actuator_z2.set_actuator(1);
-    G1();
-}
-
-void demo2() {
-    actuator_x1.set_actuator(1);
-    actuator_y1.set_actuator(40);
-    actuator_z1.set_actuator(-40);
-    actuator_x2.set_actuator(1);
-    actuator_y2.set_actuator(1);
-    actuator_z2.set_actuator(1);
-    G1();
-    open_grip();
-    actuator_x1.set_actuator(1);
-    actuator_y1.set_actuator(64);
-    actuator_z1.set_actuator(-40);
-    actuator_x2.set_actuator(2);
-    actuator_y2.set_actuator(1);
-    actuator_z2.set_actuator(1);
-    G1();
-    close_grip();
-    delay(1000);
-    actuator_x1.set_actuator(40);
-    actuator_y1.set_actuator(1);
-    actuator_z1.set_actuator(1);
-    actuator_x2.set_actuator(-4);
-    actuator_y2.set_actuator(1);
-    actuator_z2.set_actuator(1);
-    G1();
-    actuator_x1.set_actuator(40);
-    actuator_y1.set_actuator(64);
-    actuator_z1.set_actuator(-40);
-    actuator_x2.set_actuator(4);
-    actuator_y2.set_actuator(1);
-    actuator_z2.set_actuator(1);
-    G1();
-    open_grip();
-    actuator_x1.set_actuator(40);
-    actuator_y1.set_actuator(1);
-    actuator_z1.set_actuator(1);
-    actuator_x2.set_actuator(1);
-    actuator_y2.set_actuator(1);
-    actuator_z2.set_actuator(1);
-    G1();
-    actuator_x1.set_actuator(1);
-    actuator_y1.set_actuator(1);
-    actuator_z1.set_actuator(1);
-    actuator_x2.set_actuator(1);
-    actuator_y2.set_actuator(1);
-    actuator_z2.set_actuator(1);
-    G1();
-    close_grip();
-}
-
-
+int holdup = 0;
+// Read in commands from CAN Bus using 1 of 4 IDs
 bool CANBUS() {
     INT32U rxId;
+    // Empty return array used to confirm message recieved
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    //uint8_t index = i;
     while (true) {
-        if (!digitalRead(CAN0_INT))                          // If CAN0_INT pin is low, read receive buffer
+        // If CAN0_INT pin is low, read receive buffer
+        if (!digitalRead(CAN0_INT))                          
         {
-            byte recStat = CAN0.readMsgBuf(&rxId, &len, rxBuf);      // Read data: len = data length, buf = data byte(s)
+            delay(10);
+            CAN0.readMsgBuf(&rxId, &len, rxBuf); 
+            //delay(10);
+            /*
+            if (rxBuf[1] > index)
+            {
+                returnData[1] = index;
+                CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+                delay(20); 
+                CANBUS(index - 1);
+            }
+            */
             switch (rxId)
             {
-            case rxId_control:
-                CAN0.sendMsgBuf(rxId_send, 0, 8, returnData);
-                G1();
+            case RXID_CONTROL:
+                if (rxBuf[0] == 1)
+                {
+                    delay(100);
+                    returnData[1] = rxBuf[1];
+                    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+                    delay(50);
+                    G1(ANGLE_ACCELERATION);
+                }
+                if (rxBuf[1] == 1)
+                {
+                    actuator_x1.set_current_angle(0xB4);
+                    actuator_y1.set_current_angle(0xB4);
+                    actuator_z1.set_current_angle(0x5A);
+                    actuator_x2.set_current_angle(0xB4);
+                    actuator_y2.set_current_angle(0xB4);
+                    actuator_z2.set_current_angle(0xB4);
+                }
                 break;
-            case rxId_lower:
-                CAN0.sendMsgBuf(rxId_send, 0, 8, returnData);
+            case RXID_LOWER:
+                delay(50);
                 if ((rxBuf[2] + rxBuf[3]) > 0) {
                     actuator_x1.set_actuator(rxBuf[2] + rxBuf[3]);
                 }
@@ -164,9 +128,12 @@ bool CANBUS() {
                 if ((rxBuf[6] + rxBuf[7]) > 0) {
                     actuator_z1.set_actuator(rxBuf[6] + rxBuf[7]);
                 }
+                returnData[1] = rxBuf[1];
+                CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+                delay(50);
                 break;
-            case rxId_upper:
-                CAN0.sendMsgBuf(rxId_send, 0, 8, returnData);
+            case RXID_UPPER:
+                delay(50);
                 if ((rxBuf[2] + rxBuf[3]) > 0) {
                     actuator_x2.set_actuator(rxBuf[2] + rxBuf[3]);
                 }
@@ -176,8 +143,11 @@ bool CANBUS() {
                 if ((rxBuf[6] + rxBuf[7]) > 0) {
                     actuator_z2.set_actuator(rxBuf[6] + rxBuf[7]);
                 }
+                delay(50);
+                returnData[1] = rxBuf[1];
+                CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
                 break;
-            case rxId_manual:
+            case RX_MANUAL:
                 if ((rxBuf[1] - 0x10) == 1)
                 {
                     actuator_x1.set_actuator(actuator_x1.get_current_angle() - (rxBuf[0] * (rxBuf[1] - 0x10)));
@@ -248,17 +218,15 @@ bool CANBUS() {
                         analogWrite(MOTOR_IN1, 0);
                         analogWrite(MOTOR_IN2, 0);
                 }
-                G1();
+                G1(MANUAL_ACCELERATION);
                 break;
             }
         }
     }
     return true;
 }
-// END CANBUS
 
-
-
+// Mega2560 setup
 void setup() {
     // Start Serial Monitor
     Serial.begin(115200);
@@ -266,29 +234,14 @@ void setup() {
     // Start CANBus
     // Initialize MCP2515 running at 8MHz with a baudrate of 500kb/s and the masks and filters disabled.
     if (CAN0.begin(MCP_ANY, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
-        Serial.println("MCP2515 Initialized Successfully!");
+        Serial.println(F("MCP2515 Initialized Successfully!"));
     else
-        Serial.println("Error Initializing MCP2515...");
+        Serial.println(F("Error Initializing MCP2515..."));
     CAN0.setMode(MCP_NORMAL);                     // Set operation mode to normal so the MCP2515 sends acks to received data.
-    Serial.println("MCP2515 Library Receive Example...");
-    // End CANBus
+    pinMode(CAN0_INT, INPUT);
+    //Serial.println(F("initialization done."));
 
-    /*
-    // Start SD
-    Serial.print("Initializing SD card...");
-    if (!SD.begin(47)) {
-        Serial.println("initialization failed. Things to check:");
-        Serial.println("1. is a card inserted?");
-        Serial.println("2. is your wiring correct?");
-        Serial.println("3. did you change the chipSelect pin to match your shield or module?");
-        Serial.println("Note: press reset or reopen this serial monitor after fixing your issue!");
-        //while (1);
-    }
-    */
-    Serial.println("initialization done.");
-    // End SD
-
-    // Start Actuator Pin Assignements
+    // Pin qssignements for stepper motor drivers
     pinMode(ENA_x1, OUTPUT);
     pinMode(SPD_x1, OUTPUT);
     pinMode(DIR_x1, OUTPUT);
@@ -312,29 +265,35 @@ void setup() {
     pinMode(ENA_z2, OUTPUT);
     pinMode(SPD_z2, OUTPUT);
     pinMode(DIR_z2, OUTPUT);
-    // End Actuator Pin Assignements
 
-    // Temporary starting position to be replaces with sd card
-    actuator_x1.set_current_angle(180);
-    actuator_y1.set_current_angle(180);
-    actuator_z1.set_current_angle(180); 
-    actuator_x2.set_current_angle(180);
-    actuator_y2.set_current_angle(180);
-    actuator_z2.set_current_angle(180);
-    
+    // Assign grip dc motor as output
     pinMode(MOTOR_IN1, OUTPUT);
     pinMode(MOTOR_IN2, OUTPUT);
+
+    // Set starting angle for the actuators
+    actuator_x1.set_current_angle(0xB4);
+    actuator_y1.set_current_angle(0xB4);
+    actuator_z1.set_current_angle(0x5A);
+    actuator_x2.set_current_angle(0xB4);
+    actuator_y2.set_current_angle(0xB4);
+    actuator_z2.set_current_angle(0xB4);
+    Serial.end();
 }
 
+// Main loop - Calls CANBUS
 void loop() {
-    //demo1();
-    //demo2();
     //close_grip();
     //open_grip();
-    //actuator_x1.set_actuator(0xB9);
-    //G1();
-    //actuator_x1.set_actuator(0xB4);
-    //G1();
+    /*
+    actuator_x1.set_actuator(0xA8);
+    actuator_y1.set_actuator(0xA8);
+    actuator_z1.set_actuator(0xA8);
+    G1();
+    actuator_x1.set_actuator(0xB4);
+    actuator_y1.set_actuator(0xB4);
+    actuator_z1.set_actuator(0xB4);
+    G1();
+    */
     CANBUS();
 }
 
@@ -348,10 +307,11 @@ void loop() {
 *   Returns: void                                  *
 ****************************************************
 */
+/*
 void G0(void) {
 
 }
-
+*/
 
 /*
 ****************************************************
@@ -359,13 +319,12 @@ void G0(void) {
 *    - Each actuator starts moving at the same     *
 *      time and finishes when individual distance  *
 *      is reached                                  *
-*   Parameters: void                               *
+*   Parameters: Acceleration                       *
 *                                                  *
 *   Returns: void                                  *
 ****************************************************
 */
-
-void G1(void) {
+void G1(int acceleration) {
     int long index = 0;
     digitalWrite(DIR_x1, actuator_x1.get_actuator_direction());
     digitalWrite(DIR_y1, actuator_y1.get_actuator_direction());
@@ -374,7 +333,13 @@ void G1(void) {
     digitalWrite(DIR_y2, actuator_y2.get_actuator_direction());
     digitalWrite(DIR_z2, actuator_z2.get_actuator_direction());
 
-    int acceleration = 100;
+    actuator_x1.move();
+    actuator_y1.move();
+    actuator_z1.move();
+    actuator_x2.move();
+    actuator_y2.move();
+    actuator_z2.move();
+
     while ((index < actuator_x1.get_steps_to_move()) || (index < actuator_y1.get_steps_to_move()) || (index < actuator_z1.get_steps_to_move())
         || (index < actuator_x2.get_steps_to_move()) || (index < actuator_y2.get_steps_to_move()) || (index < actuator_z2.get_steps_to_move()))
     {
@@ -383,7 +348,7 @@ void G1(void) {
             digitalWrite(SPD_x1, true);
         }
         if ((index < actuator_x2.get_steps_to_move())) {
-            //actuator_x1.enable_actuator = true;
+            //actuator_x2.enable_actuator = true;
             digitalWrite(SPD_x2, true);
         }
         if (index < actuator_y1.get_steps_to_move()) {
@@ -391,7 +356,7 @@ void G1(void) {
             digitalWrite(SPD_y1, true);
         }
         if (index < actuator_y2.get_steps_to_move()) {
-            // actuator_y1.enable_actuator = false;
+            // actuator_y2.enable_actuator = false;
             digitalWrite(SPD_y2, true);
         }
         if (index < actuator_z1.get_steps_to_move()) {
@@ -399,7 +364,7 @@ void G1(void) {
             digitalWrite(SPD_z1, true);
         }
         if (index < actuator_z2.get_steps_to_move()) {
-            //actuator_z1.enable_actuator = false;
+            //actuator_z2.enable_actuator = false;
             digitalWrite(SPD_z2, true);
         }
 
@@ -430,8 +395,9 @@ void G1(void) {
 *   Returns: void                                  *
 ****************************************************
 */
-
+/*
 void G2(void) {
+        // Under Development
     int step_array[NUMBER_OF_ACTUATORS] = { actuator_x1.get_steps_to_move(), actuator_y1.get_steps_to_move(), actuator_z1.get_steps_to_move(), actuator_x2.get_steps_to_move(), actuator_y2.get_steps_to_move(), actuator_z2.get_steps_to_move() };
     int long index = 0;
     int greatest_value = step_array[0];
@@ -448,7 +414,6 @@ void G2(void) {
     actuator_y2.set_actuator_speed((k_constant / (step_array[4] * STEPS_PER_DEGREE)));
     actuator_z2.set_actuator_speed((k_constant / (step_array[5] * STEPS_PER_DEGREE)));
 
-
     while (index < greatest_value) {
         digitalWrite(SPD_x1, true);
         digitalWrite(SPD_x2, true);
@@ -459,3 +424,4 @@ void G2(void) {
         index++;
     }
 }
+*/
