@@ -27,7 +27,7 @@ Actuator actuator_x2;
 Actuator actuator_y2;
 Actuator actuator_z2;
 
-#define ANGLE_ACCELERATION 100
+#define ANGLE_ACCELERATION 500
 #define MANUAL_ACCELERATION 1
 
 // CAN Bus settings
@@ -84,7 +84,7 @@ bool CANBUS() {
         // If CAN0_INT pin is low, read receive buffer
         if (!digitalRead(CAN0_INT))                          
         {
-            delay(10);
+            //delay(10);
             CAN0.readMsgBuf(&rxId, &len, rxBuf); 
             //delay(10);
             /*
@@ -284,17 +284,14 @@ void setup() {
 void loop() {
     //close_grip();
     //open_grip();
-    /*
-    actuator_x1.set_actuator(0xA8);
-    actuator_y1.set_actuator(0xA8);
-    actuator_z1.set_actuator(0xA8);
-    G1();
-    actuator_x1.set_actuator(0xB4);
-    actuator_y1.set_actuator(0xB4);
-    actuator_z1.set_actuator(0xB4);
-    G1();
-    */
-    CANBUS();
+    actuator_x1.set_actuator(110);
+    actuator_y1.set_actuator(110);
+    G1(400);
+    actuator_x1.set_actuator(250);
+    actuator_y1.set_actuator(250);
+    G1(400);
+    
+    //CANBUS();
 }
 
 /*
