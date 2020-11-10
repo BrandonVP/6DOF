@@ -32,11 +32,11 @@ Actuator actuator_z2;
 
 // CAN Bus settings
 #define CAN0_INT 47      
-#define RXID_SEND 0x0C1
-#define RXID_CONTROL 0x0A0
-#define RXID_LOWER 0x0A1
-#define RXID_UPPER 0x0A2
-#define RX_MANUAL 0x0A3
+#define RXID_SEND    0x0C1
+#define RXID_CONTROL 0x0B0
+#define RXID_LOWER   0x0B1
+#define RXID_UPPER   0x0B2
+#define RX_MANUAL    0x0B3
 INT8U len = 0;
 INT8U rxBuf[8];
 
@@ -52,7 +52,7 @@ void close_grip() {
     analogWrite(MOTOR_IN2, 0);
     analogWrite(MOTOR_IN1, 255);
     delay(1);
-    for (i = 188; i >= 0; i--) {
+    for (i = 188; i >= 1; i--) {
         analogWrite(MOTOR_IN1, i);
         delay(6);
     }
@@ -79,33 +79,29 @@ bool CANBUS() {
     INT32U rxId;
     // Empty return array used to confirm message recieved
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    //uint8_t index = i;
     while (true) {
         // If CAN0_INT pin is low, read receive buffer
         if (!digitalRead(CAN0_INT))                          
         {
-            //delay(10);
             CAN0.readMsgBuf(&rxId, &len, rxBuf); 
-            //delay(10);
-            /*
-            if (rxBuf[1] > index)
-            {
-                returnData[1] = index;
-                CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-                delay(20); 
-                CANBUS(index - 1);
-            }
-            */
             switch (rxId)
             {
             case RXID_CONTROL:
-                if (rxBuf[0] == 1)
+                if (rxBuf[1] == 2)
                 {
-                    delay(100);
-                    returnData[1] = rxBuf[1];
+                    returnData[2] = actuator_x1.get_current_angle();
+                    returnData[3] = actuator_y1.get_current_angle();
+                    returnData[4] = actuator_z1.get_current_angle();
+                    returnData[5] = actuator_x2.get_current_angle();
+                    returnData[6] = actuator_y2.get_current_angle();
+                    returnData[7] = actuator_z2.get_current_angle();
                     CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-                    delay(50);
-                    G1(ANGLE_ACCELERATION);
+                    returnData[2] = 0x00;
+                    returnData[3] = 0x00;
+                    returnData[4] = 0x00;
+                    returnData[5] = 0x00;
+                    returnData[6] = 0x00;
+                    returnData[7] = 0x00;
                 }
                 if (rxBuf[1] == 1)
                 {
@@ -115,6 +111,22 @@ bool CANBUS() {
                     actuator_x2.set_current_angle(0xB4);
                     actuator_y2.set_current_angle(0xB4);
                     actuator_z2.set_current_angle(0xB4);
+                }
+                if (rxBuf[6] == 1)
+                {
+                    open_grip();
+                }
+                if (rxBuf[0] == 1)
+                {
+                    delay(100);
+                    returnData[1] = rxBuf[1];
+                    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+                    delay(50);
+                    G1(ANGLE_ACCELERATION);
+                }
+                if (rxBuf[7] == 1)
+                {
+                    close_grip();
                 }
                 break;
             case RXID_LOWER:
@@ -282,16 +294,14 @@ void setup() {
 
 // Main loop - Calls CANBUS
 void loop() {
-    //close_grip();
-    //open_grip();
-    actuator_x1.set_actuator(110);
-    actuator_y1.set_actuator(110);
-    G1(400);
-    actuator_x1.set_actuator(250);
-    actuator_y1.set_actuator(250);
-    G1(400);
+    //actuator_x1.set_actuator(110);
+    //actuator_y1.set_actuator(110);
+    //G1(400);
+    //actuator_x1.set_actuator(250);
+    //actuator_y1.set_actuator(250);
+    //G1(400);
     
-    //CANBUS();
+    CANBUS();
 }
 
 /*
