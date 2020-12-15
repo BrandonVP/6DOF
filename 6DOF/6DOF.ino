@@ -33,10 +33,10 @@ Actuator actuator_z2;
 // CAN Bus settings
 #define CAN0_INT 47      
 #define RXID_SEND    0x0C1
-#define RXID_CONTROL 0x0B0
-#define RXID_LOWER   0x0B1
-#define RXID_UPPER   0x0B2
-#define RX_MANUAL    0x0B3
+#define RXID_CONTROL 0x0A0
+#define RXID_LOWER   0x0A1
+#define RXID_UPPER   0x0A2
+#define RX_MANUAL    0x0A3
 INT8U len = 0;
 INT8U rxBuf[8];
 
@@ -83,19 +83,57 @@ bool CANBUS() {
         // If CAN0_INT pin is low, read receive buffer
         if (!digitalRead(CAN0_INT))                          
         {
-            CAN0.readMsgBuf(&rxId, &len, rxBuf); 
+            byte recStat = CAN0.readMsgBuf(&rxId, &len, rxBuf);
+            Serial.print("ID: ");
+            rxId = (uint16_t)rxId;
+            Serial.print(rxId);
+            Serial.print(" MSG: ");
+            Serial.println(rxBuf[0]);
             switch (rxId)
             {
             case RXID_CONTROL:
-                if (rxBuf[1] == 2)
+                /*=========================================================
+                            Return Current Lower Axis Positions
+                ===========================================================*/
+                if (rxBuf[1] == 1)
                 {
-                    returnData[2] = actuator_x1.get_current_angle();
-                    returnData[3] = actuator_y1.get_current_angle();
-                    returnData[4] = actuator_z1.get_current_angle();
-                    returnData[5] = actuator_x2.get_current_angle();
-                    returnData[6] = actuator_y2.get_current_angle();
-                    returnData[7] = actuator_z2.get_current_angle();
+                    uint8_t temp;
+
+                    returnData[0] = 0x01;
+                    temp = actuator_x1.get_current_angle();
+                    if (temp > 255)
+                    {
+                        returnData[2] = 0x01;
+                        returnData[3] = temp - 0xFF;
+                    }
+                    else
+                    {
+                        returnData[3] = temp;
+                    }
+                    temp = actuator_y1.get_current_angle();
+                    if (temp > 255)
+                    {
+                        returnData[4] = 0x01;
+                        returnData[5] = temp - 0xFF;
+                    }
+                    else
+                    {
+                        returnData[5] = temp;
+                    }
+                    temp = actuator_z1.get_current_angle();
+                    if (temp > 255)
+                    {
+                        returnData[6] = 0x01;
+                        returnData[7] = temp - 0xFF;
+                    }
+                    else
+                    {
+                        returnData[7] = temp;
+                    }      
                     CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+
+                    returnData[0] = 0x00;
+                    returnData[1] = 0x00;
                     returnData[2] = 0x00;
                     returnData[3] = 0x00;
                     returnData[4] = 0x00;
@@ -103,7 +141,61 @@ bool CANBUS() {
                     returnData[6] = 0x00;
                     returnData[7] = 0x00;
                 }
-                if (rxBuf[1] == 1)
+
+                /*=========================================================
+                            Return Current Higher Axis Positions
+                ===========================================================*/
+                if (rxBuf[1] == 2)
+                {
+                    uint8_t temp;
+
+                    returnData[0] = 0x02;
+                    temp = actuator_x2.get_current_angle();
+                    if (temp > 255)
+                    {
+                        returnData[2] = 0x01;
+                        returnData[3] = temp - 0xFF;
+                    }
+                    else
+                    {
+                        returnData[3] = temp;
+                    }
+                    temp = actuator_y2.get_current_angle();
+                    if (temp > 255)
+                    {
+                        returnData[4] = 0x01;
+                        returnData[5] = temp - 0xFF;
+                    }
+                    else
+                    {
+                        returnData[5] = temp;
+                    }
+                    temp = actuator_z2.get_current_angle();
+                    if (temp > 255)
+                    {
+                        returnData[6] = 0x01;
+                        returnData[7] = temp - 0xFF;
+                    }
+                    else
+                    {
+                        returnData[7] = temp;
+                    }
+                    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+
+                    returnData[0] = 0x00;
+                    returnData[1] = 0x00;
+                    returnData[2] = 0x00;
+                    returnData[3] = 0x00;
+                    returnData[4] = 0x00;
+                    returnData[5] = 0x00;
+                    returnData[6] = 0x00;
+                    returnData[7] = 0x00;
+                }
+
+                /*=========================================================
+                            Set Axis Angles to Current Postion
+                ===========================================================*/
+                if (rxBuf[1] == 3)
                 {
                     actuator_x1.set_current_angle(0xB4);
                     actuator_y1.set_current_angle(0xB4);
@@ -112,10 +204,23 @@ bool CANBUS() {
                     actuator_y2.set_current_angle(0xB4);
                     actuator_z2.set_current_angle(0xB4);
                 }
+
+                /*=========================================================
+                            Open/Close Grip
+                ===========================================================*/
                 if (rxBuf[6] == 1)
                 {
                     open_grip();
                 }
+                if (rxBuf[7] == 1)
+                {
+                    close_grip();
+                }
+                break;
+
+                /*=========================================================
+                            Executes Move
+                ===========================================================*/
                 if (rxBuf[0] == 1)
                 {
                     delay(100);
@@ -124,11 +229,6 @@ bool CANBUS() {
                     delay(50);
                     G1(ANGLE_ACCELERATION);
                 }
-                if (rxBuf[7] == 1)
-                {
-                    close_grip();
-                }
-                break;
             case RXID_LOWER:
                 delay(50);
                 if ((rxBuf[2] + rxBuf[3]) > 0) {
@@ -289,7 +389,7 @@ void setup() {
     actuator_x2.set_current_angle(0xB4);
     actuator_y2.set_current_angle(0xB4);
     actuator_z2.set_current_angle(0xB4);
-    Serial.end();
+    //Serial.end();
 }
 
 // Main loop - Calls CANBUS
