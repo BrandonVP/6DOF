@@ -95,7 +95,7 @@ bool CANBUS() {
                 /*=========================================================
                             Return Current Lower Axis Positions
                 ===========================================================*/
-                if (rxBuf[1] == 1)
+                if (rxBuf[1] == 0x01)
                 {
                     uint8_t temp;
 
@@ -140,12 +140,13 @@ bool CANBUS() {
                     returnData[5] = 0x00;
                     returnData[6] = 0x00;
                     returnData[7] = 0x00;
+                    break;
                 }
 
                 /*=========================================================
                             Return Current Higher Axis Positions
                 ===========================================================*/
-                if (rxBuf[1] == 2)
+                if (rxBuf[1] == 0x02)
                 {
                     uint8_t temp;
 
@@ -190,12 +191,13 @@ bool CANBUS() {
                     returnData[5] = 0x00;
                     returnData[6] = 0x00;
                     returnData[7] = 0x00;
+                    break;
                 }
 
                 /*=========================================================
                             Set Axis Angles to Current Postion
                 ===========================================================*/
-                if (rxBuf[1] == 3)
+                if (rxBuf[1] == 0x03)
                 {
                     actuator_x1.set_current_angle(0xB4);
                     actuator_y1.set_current_angle(0xB4);
@@ -208,20 +210,19 @@ bool CANBUS() {
                 /*=========================================================
                             Open/Close Grip
                 ===========================================================*/
-                if (rxBuf[6] == 1)
+                if (rxBuf[6] == 0x01)
                 {
                     open_grip();
                 }
-                if (rxBuf[7] == 1)
+                if (rxBuf[7] == 0x01)
                 {
                     close_grip();
                 }
-                break;
 
                 /*=========================================================
                             Executes Move
                 ===========================================================*/
-                if (rxBuf[0] == 1)
+                if (rxBuf[0] == 0x01)
                 {
                     delay(100);
                     returnData[1] = rxBuf[1];
