@@ -6,6 +6,10 @@
 #include "PinAssignments.cpp"
 #include "Actuator.cpp"
 
+// Select channel IDs
+#include "ch1.h"
+//#include "ch2.h"
+
 
 // Global settings
 const int PULSE_SPEED = 135;           // Lower number produces higher RPM
@@ -32,11 +36,6 @@ Actuator actuator_z2;
 
 // CAN Bus settings
 #define CAN0_INT 47      
-#define RXID_SEND    0x0C1
-#define RXID_CONTROL 0x0A0
-#define RXID_LOWER   0x0A1
-#define RXID_UPPER   0x0A2
-#define RX_MANUAL    0x0A3
 INT8U len = 0;
 INT8U rxBuf[8];
 
@@ -64,7 +63,7 @@ void close_grip() {
 void open_grip() {
     analogWrite(MOTOR_IN1, 0);
     analogWrite(MOTOR_IN2, 255);
-    delay(340);
+    delay(350);
     //for (int i = 255; i >= 0; i--) {
     //    analogWrite(MOTOR_IN2, i);
     //    delay(1);
@@ -84,12 +83,30 @@ bool CANBUS() {
         if (!digitalRead(CAN0_INT))                          
         {
             byte recStat = CAN0.readMsgBuf(&rxId, &len, rxBuf);
+            uint16_t test = rxId;
+            
+            //rxId = (uint16_t)rxId;
+            
             Serial.print("ID: ");
-            rxId = (uint16_t)rxId;
-            Serial.print(rxId);
+            Serial.print(test, 16);
             Serial.print(" MSG: ");
-            Serial.println(rxBuf[0]);
-            switch (rxId)
+            Serial.print(rxBuf[0]);
+            Serial.print(" ");
+            Serial.print(rxBuf[1]);
+            Serial.print(" ");
+            Serial.print(rxBuf[2]);
+            Serial.print(" ");
+            Serial.print(rxBuf[3]);
+            Serial.print(" ");
+            Serial.print(rxBuf[4]);
+            Serial.print(" ");
+            Serial.print(rxBuf[5]);
+            Serial.print(" ");
+            Serial.print(rxBuf[6]);
+            Serial.print(" ");
+            Serial.println(rxBuf[7]);
+            
+            switch (test)
             {
             case RXID_CONTROL:
                 /*=========================================================
@@ -97,14 +114,14 @@ bool CANBUS() {
                 ===========================================================*/
                 if (rxBuf[1] == 0x01)
                 {
-                    uint8_t temp;
+                    uint16_t temp;
 
                     returnData[0] = 0x01;
                     temp = actuator_x1.get_current_angle();
                     if (temp > 255)
                     {
                         returnData[2] = 0x01;
-                        returnData[3] = temp - 0xFF;
+                        returnData[3] = temp - 256;
                     }
                     else
                     {
@@ -114,7 +131,7 @@ bool CANBUS() {
                     if (temp > 255)
                     {
                         returnData[4] = 0x01;
-                        returnData[5] = temp - 0xFF;
+                        returnData[5] = temp - 256;
                     }
                     else
                     {
@@ -124,7 +141,7 @@ bool CANBUS() {
                     if (temp > 255)
                     {
                         returnData[6] = 0x01;
-                        returnData[7] = temp - 0xFF;
+                        returnData[7] = temp - 256;
                     }
                     else
                     {
@@ -155,7 +172,7 @@ bool CANBUS() {
                     if (temp > 255)
                     {
                         returnData[2] = 0x01;
-                        returnData[3] = temp - 0xFF;
+                        returnData[3] = temp - 256;
                     }
                     else
                     {
@@ -165,7 +182,7 @@ bool CANBUS() {
                     if (temp > 255)
                     {
                         returnData[4] = 0x01;
-                        returnData[5] = temp - 0xFF;
+                        returnData[5] = temp - 256;
                     }
                     else
                     {
@@ -175,7 +192,7 @@ bool CANBUS() {
                     if (temp > 255)
                     {
                         returnData[6] = 0x01;
-                        returnData[7] = temp - 0xFF;
+                        returnData[7] = temp - 256;
                     }
                     else
                     {
@@ -224,14 +241,12 @@ bool CANBUS() {
                 ===========================================================*/
                 if (rxBuf[0] == 0x01)
                 {
-                    delay(100);
-                    returnData[1] = rxBuf[1];
+                    returnData[1] = 0x03;
                     CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-                    delay(50);
-                    G1(ANGLE_ACCELERATION);
+                    G1(ANGLE_ACCELERATION); 
                 }
             case RXID_LOWER:
-                delay(50);
+                //delay(50);
                 if ((rxBuf[2] + rxBuf[3]) > 0) {
                     actuator_x1.set_actuator(rxBuf[2] + rxBuf[3]);
                 }
@@ -241,12 +256,12 @@ bool CANBUS() {
                 if ((rxBuf[6] + rxBuf[7]) > 0) {
                     actuator_z1.set_actuator(rxBuf[6] + rxBuf[7]);
                 }
-                returnData[1] = rxBuf[1];
+                returnData[1] = 0x01;
                 CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-                delay(50);
+                //delay(50);
                 break;
             case RXID_UPPER:
-                delay(50);
+                //delay(50);
                 if ((rxBuf[2] + rxBuf[3]) > 0) {
                     actuator_x2.set_actuator(rxBuf[2] + rxBuf[3]);
                 }
@@ -256,8 +271,8 @@ bool CANBUS() {
                 if ((rxBuf[6] + rxBuf[7]) > 0) {
                     actuator_z2.set_actuator(rxBuf[6] + rxBuf[7]);
                 }
-                delay(50);
-                returnData[1] = rxBuf[1];
+                //delay(50);
+                returnData[1] = 0x02;
                 CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
                 break;
             case RX_MANUAL:
@@ -346,12 +361,32 @@ void setup() {
 
     // Start CANBus
     // Initialize MCP2515 running at 8MHz with a baudrate of 500kb/s and the masks and filters disabled.
-    if (CAN0.begin(MCP_ANY, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
+    if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
         Serial.println(F("MCP2515 Initialized Successfully!"));
     else
         Serial.println(F("Error Initializing MCP2515..."));
-    CAN0.setMode(MCP_NORMAL);                     // Set operation mode to normal so the MCP2515 sends acks to received data.
     pinMode(CAN0_INT, INPUT);
+
+    
+    CAN0.init_Mask(0, 0, 0x00AF0000);                // Init first mask...
+    CAN0.init_Filt(0, 0, 0x00A00000);                // Init first filter...
+    CAN0.init_Filt(1, 0, 0x00A10000);                // Init second filter...
+
+    CAN0.init_Mask(1, 0, 0x00AF0000);                // Init second mask... 
+    CAN0.init_Filt(2, 0, 0x00A20000);                // Init third filter...
+    CAN0.init_Filt(3, 0, 0x00A30000);                // Init fouth filter...
+    
+    /*
+    CAN0.init_Mask(0, 0, 0x00BF0000);                // Init first mask...
+    CAN0.init_Filt(0, 0, 0x00B00000);                // Init first filter...
+    CAN0.init_Filt(1, 0, 0x00B10000);                // Init second filter...
+
+    CAN0.init_Mask(1, 0, 0x00BF0000);                // Init second mask... 
+    CAN0.init_Filt(2, 0, 0x00B20000);                // Init third filter...
+    CAN0.init_Filt(3, 0, 0x00B30000);                // Init fouth filter...
+    */
+    CAN0.setMode(MCP_NORMAL);                     // Set operation mode to normal so the MCP2515 sends acks to received data.
+    
     //Serial.println(F("initialization done."));
 
     // Pin qssignements for stepper motor drivers

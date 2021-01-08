@@ -33,6 +33,12 @@
     <ClInclude Include="mcp_can_dfs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ch1.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ch2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Actuator.cpp">

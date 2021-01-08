@@ -40,7 +40,8 @@ public:
 		// Calculate distance to move
 		int dis_to_move = new_pos_x1 - currentAngle;
 		if (dis_to_move < 0) {
-			dis_to_move = dis_to_move - (2 * dis_to_move);
+			//dis_to_move = dis_to_move - (2 * dis_to_move);
+			dis_to_move = dis_to_move * ((dis_to_move > 0) - (dis_to_move < 0));
 		}
 
 		// Convert degrees to steps
