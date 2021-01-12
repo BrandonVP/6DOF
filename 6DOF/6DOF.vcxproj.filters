@@ -27,16 +27,13 @@
     <ClInclude Include="Actuator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="mcp_can.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="mcp_can_dfs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ch1.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ch2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CANBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -44,10 +41,10 @@
     <ClCompile Include="Actuator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="PinAssignments.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="PinAssignments.h">
+      <Filter>Header Files</Filter>
     </ClCompile>
-    <ClCompile Include="mcp_can.cpp">
+    <ClCompile Include="CANBuffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

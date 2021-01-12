@@ -1,20 +1,28 @@
-#pragma once
-#ifndef ACTUATOR_H
-#define ACTUATOR_H
+// Actuator.h
+
+#ifndef _Actuator_h
+#define _Actuator_h
+
+#if defined(ARDUINO) && ARDUINO >= 100
+#include "arduino.h"
+#else
+#include "WProgram.h"
+#endif
+
 class Actuator
 {
-private:
-	//int g_code;           // Set g_code mode for next cycle  
-	int current_angle;        // Angle of actuators position in degrees
-	int long steps_to_move;   // Set quantity of steps to move in next cycle
-	bool actuator_direction;  // Current direction of actuator
-	bool enable_actuator;     // Enable actuator to accept pulse
-	double actuator_speed;    // Set individual actuator speed
+protected:
+	int currentAngle;        // Angle of actuators position in degrees
+	int nextAngle;			 // Angle moved to current once sent to G1-3
+	unsigned int long stepsToMove;   // Set quantity of steps to move in next cycle
+	double actuatorSpeed;    // Set individual actuator speed
+	bool actuatorDirection;  // Current direction of actuator
+	bool enableActuator;     // Enable actuator to accept pulse
+	bool readyToMove = false;
+
 public:
+	void move();
 	void set_actuator(int new_pos_x1);
-	//void actuator(int new_pos);
-	//void set_g_gode(int g_code);
-	//uint8_t get_g_gode();
 	void set_current_angle(int current_angle);
 	int get_current_angle();
 	void set_steps_to_move(int long steps_to_move);
@@ -23,8 +31,7 @@ public:
 	bool get_actuator_direction();
 	void set_enable_actuator(bool enable_actuator);
 	bool get_enable_actuator();
-	//void set_actuator_speed();
-	double get_actuator_speed();
 };
+
 #endif
 

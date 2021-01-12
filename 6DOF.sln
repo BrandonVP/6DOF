@@ -5,7 +5,13 @@ VisualStudioVersion = 16.0.30128.74
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "6DOF", "6DOF\6DOF.vcxproj", "{C5F80730-F44F-4478-BDAE-6634EFC2CA88}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MCP_CAN_lib-master-0.0.0", "6DOF\Libraries\MCP_CAN_lib-master\0.0.0\MCP_CAN_lib-master\MCP_CAN_lib-master-0.0.0.vcxitems", "{25482957-4408-4208-8C7C-6D6181E40970}"
+EndProject
 Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		6DOF\Libraries\MCP_CAN_lib-master\0.0.0\MCP_CAN_lib-master\MCP_CAN_lib-master-0.0.0.vcxitems*{25482957-4408-4208-8c7c-6d6181e40970}*SharedItemsImports = 9
+		6DOF\Libraries\MCP_CAN_lib-master\0.0.0\MCP_CAN_lib-master\MCP_CAN_lib-master-0.0.0.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
 		Release|x86 = Release|x86

@@ -1,46 +1,52 @@
-//#include <SdFat.h>
-//#include <SD.h>
-//#include <stdint.h>
+/*
+ Name:		_6DOF_V2.ino
+ Created:	1/10/2021 3:31:56 PM
+ Author:	Brandon Van Pelt
+*/
+
+#include "Actuator.h"
+#include "CANBuffer.h"
+#include <LinkedListLib.h>
+#include <mcp_can_dfs.h>
+#include <mcp_can.h>
+#include "PinAssignments.h"
 #include <SPI.h>
-#include "mcp_can.h"
-#include "PinAssignments.cpp"
-#include "Actuator.cpp"
 
 // Select channel IDs
 #include "ch1.h"
 //#include "ch2.h"
 
-
-// Global settings
-const int PULSE_SPEED = 135;           // Lower number produces higher RPM
-const int SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
-const int SPEED_ADJUSTED_G1 = PULSE_SPEED - 24;         // SPEED_ADJUSTED compensates time used for CPU to run logic in G1 loop
-const int SPEED_ADJUSTED_G2 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
-//const int NUMBER_OF_ACTUATORS = 6;    
-
-// Should this be moved?
-//File myFile;
-
-// Actuator objects
-// Base x, y, z, 1
-Actuator actuator_x1;
-Actuator actuator_y1;
-Actuator actuator_z1;
-// Wrist x, y, z, 2
-Actuator actuator_x2;
-Actuator actuator_y2;
-Actuator actuator_z2;
-
+#define CS_PIN    49
+#define INT_PIN   2
+#define LED_CAN_TX LED_BUILTIN
 #define ANGLE_ACCELERATION 500
 #define MANUAL_ACCELERATION 1
 
-// CAN Bus settings
-#define CAN0_INT 47      
+// Global settings
+constexpr auto PULSE_SPEED = 135;           // Lower number produces higher RPM
+constexpr auto SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
+constexpr auto SPEED_ADJUSTED_G1 = PULSE_SPEED - 24;         // SPEED_ADJUSTED compensates time used for CPU to run logic in G1 loop
+constexpr auto SPEED_ADJUSTED_G2 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
+
+
+//
+long unsigned int rxId;
 INT8U len = 0;
 INT8U rxBuf[8];
 
-// CS Pin
 MCP_CAN CAN0(49);
+
+// Linked list of nodes for a program
+LinkedList<CANBuffer*> buffer;
+
+// Actuator objects
+Actuator axis1;
+Actuator axis2;
+Actuator axis3;
+Actuator axis4;
+Actuator axis5;
+Actuator axis6;
+
 
 // Open grip is true
 bool isGrip = true;
@@ -72,322 +78,40 @@ void open_grip() {
     analogWrite(MOTOR_IN2, 0);
 }
 
-int holdup = 0;
-// Read in commands from CAN Bus using 1 of 4 IDs
-bool CANBUS() {
-    INT32U rxId;
-    // Empty return array used to confirm message recieved
-    byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    while (true) {
-        // If CAN0_INT pin is low, read receive buffer
-        if (!digitalRead(CAN0_INT))                          
-        {
-            byte recStat = CAN0.readMsgBuf(&rxId, &len, rxBuf);
-            uint16_t test = rxId;
-            
-            //rxId = (uint16_t)rxId;
-            
-            Serial.print("ID: ");
-            Serial.print(test, 16);
-            Serial.print(" MSG: ");
-            Serial.print(rxBuf[0]);
-            Serial.print(" ");
-            Serial.print(rxBuf[1]);
-            Serial.print(" ");
-            Serial.print(rxBuf[2]);
-            Serial.print(" ");
-            Serial.print(rxBuf[3]);
-            Serial.print(" ");
-            Serial.print(rxBuf[4]);
-            Serial.print(" ");
-            Serial.print(rxBuf[5]);
-            Serial.print(" ");
-            Serial.print(rxBuf[6]);
-            Serial.print(" ");
-            Serial.println(rxBuf[7]);
-            
-            switch (test)
-            {
-            case RXID_CONTROL:
-                /*=========================================================
-                            Return Current Lower Axis Positions
-                ===========================================================*/
-                if (rxBuf[1] == 0x01)
-                {
-                    uint16_t temp;
-
-                    returnData[0] = 0x01;
-                    temp = actuator_x1.get_current_angle();
-                    if (temp > 255)
-                    {
-                        returnData[2] = 0x01;
-                        returnData[3] = temp - 256;
-                    }
-                    else
-                    {
-                        returnData[3] = temp;
-                    }
-                    temp = actuator_y1.get_current_angle();
-                    if (temp > 255)
-                    {
-                        returnData[4] = 0x01;
-                        returnData[5] = temp - 256;
-                    }
-                    else
-                    {
-                        returnData[5] = temp;
-                    }
-                    temp = actuator_z1.get_current_angle();
-                    if (temp > 255)
-                    {
-                        returnData[6] = 0x01;
-                        returnData[7] = temp - 256;
-                    }
-                    else
-                    {
-                        returnData[7] = temp;
-                    }      
-                    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-
-                    returnData[0] = 0x00;
-                    returnData[1] = 0x00;
-                    returnData[2] = 0x00;
-                    returnData[3] = 0x00;
-                    returnData[4] = 0x00;
-                    returnData[5] = 0x00;
-                    returnData[6] = 0x00;
-                    returnData[7] = 0x00;
-                    break;
-                }
-
-                /*=========================================================
-                            Return Current Higher Axis Positions
-                ===========================================================*/
-                if (rxBuf[1] == 0x02)
-                {
-                    uint8_t temp;
-
-                    returnData[0] = 0x02;
-                    temp = actuator_x2.get_current_angle();
-                    if (temp > 255)
-                    {
-                        returnData[2] = 0x01;
-                        returnData[3] = temp - 256;
-                    }
-                    else
-                    {
-                        returnData[3] = temp;
-                    }
-                    temp = actuator_y2.get_current_angle();
-                    if (temp > 255)
-                    {
-                        returnData[4] = 0x01;
-                        returnData[5] = temp - 256;
-                    }
-                    else
-                    {
-                        returnData[5] = temp;
-                    }
-                    temp = actuator_z2.get_current_angle();
-                    if (temp > 255)
-                    {
-                        returnData[6] = 0x01;
-                        returnData[7] = temp - 256;
-                    }
-                    else
-                    {
-                        returnData[7] = temp;
-                    }
-                    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-
-                    returnData[0] = 0x00;
-                    returnData[1] = 0x00;
-                    returnData[2] = 0x00;
-                    returnData[3] = 0x00;
-                    returnData[4] = 0x00;
-                    returnData[5] = 0x00;
-                    returnData[6] = 0x00;
-                    returnData[7] = 0x00;
-                    break;
-                }
-
-                /*=========================================================
-                            Set Axis Angles to Current Postion
-                ===========================================================*/
-                if (rxBuf[1] == 0x03)
-                {
-                    actuator_x1.set_current_angle(0xB4);
-                    actuator_y1.set_current_angle(0xB4);
-                    actuator_z1.set_current_angle(0x5A);
-                    actuator_x2.set_current_angle(0xB4);
-                    actuator_y2.set_current_angle(0xB4);
-                    actuator_z2.set_current_angle(0xB4);
-                }
-
-                /*=========================================================
-                            Open/Close Grip
-                ===========================================================*/
-                if (rxBuf[6] == 0x01)
-                {
-                    open_grip();
-                }
-                if (rxBuf[7] == 0x01)
-                {
-                    close_grip();
-                }
-
-                /*=========================================================
-                            Executes Move
-                ===========================================================*/
-                if (rxBuf[0] == 0x01)
-                {
-                    returnData[1] = 0x03;
-                    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-                    G1(ANGLE_ACCELERATION); 
-                }
-            case RXID_LOWER:
-                //delay(50);
-                if ((rxBuf[2] + rxBuf[3]) > 0) {
-                    actuator_x1.set_actuator(rxBuf[2] + rxBuf[3]);
-                }
-                if ((rxBuf[4] + rxBuf[5]) > 0) {
-                    actuator_y1.set_actuator(rxBuf[4] + rxBuf[5]);
-                }
-                if ((rxBuf[6] + rxBuf[7]) > 0) {
-                    actuator_z1.set_actuator(rxBuf[6] + rxBuf[7]);
-                }
-                returnData[1] = 0x01;
-                CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-                //delay(50);
-                break;
-            case RXID_UPPER:
-                //delay(50);
-                if ((rxBuf[2] + rxBuf[3]) > 0) {
-                    actuator_x2.set_actuator(rxBuf[2] + rxBuf[3]);
-                }
-                if ((rxBuf[4] + rxBuf[5]) > 0) {
-                    actuator_y2.set_actuator(rxBuf[4] + rxBuf[5]);
-                }
-                if ((rxBuf[6] + rxBuf[7]) > 0) {
-                    actuator_z2.set_actuator(rxBuf[6] + rxBuf[7]);
-                }
-                //delay(50);
-                returnData[1] = 0x02;
-                CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-                break;
-            case RX_MANUAL:
-                if ((rxBuf[1] - 0x10) == 1)
-                {
-                    actuator_x1.set_actuator(actuator_x1.get_current_angle() - (rxBuf[0] * (rxBuf[1] - 0x10)));
-                }
-                else
-                {
-                    actuator_x1.set_actuator(actuator_x1.get_current_angle() + (rxBuf[0] * rxBuf[1]));
-                }
-
-                if ((rxBuf[2] - 0x10) == 1)
-                {
-                    actuator_y1.set_actuator(actuator_y1.get_current_angle() - (rxBuf[0] * (rxBuf[2] - 0x10)));
-                }
-                else
-                {
-                    actuator_y1.set_actuator(actuator_y1.get_current_angle() + (rxBuf[0] * rxBuf[2]));
-                }
-
-                if ((rxBuf[3] - 0x10) == 1)
-                {
-                    actuator_z1.set_actuator(actuator_z1.get_current_angle() - (rxBuf[0] * (rxBuf[3] - 0x10)));
-                }
-                else
-                {
-                    actuator_z1.set_actuator(actuator_z1.get_current_angle() + (rxBuf[0] * rxBuf[3]));
-                }
-
-                if ((rxBuf[4] - 0x10) == 1)
-                {
-                    actuator_x2.set_actuator(actuator_x2.get_current_angle() - (rxBuf[0] * (rxBuf[4] - 0x10)));
-                }
-                else
-                {
-                    actuator_x2.set_actuator(actuator_x2.get_current_angle() + (rxBuf[0] * rxBuf[4]));
-                }
-
-                if ((rxBuf[5] - 0x10) == 1)
-                {
-                    actuator_y2.set_actuator(actuator_y2.get_current_angle() - (rxBuf[0] * (rxBuf[5] - 0x10)));
-                }
-                else
-                {
-                    actuator_y2.set_actuator(actuator_y2.get_current_angle() + (rxBuf[0] * rxBuf[5]));
-                }
-
-                if ((rxBuf[6] - 0x10) == 1)
-                {
-                    actuator_z2.set_actuator(actuator_z2.get_current_angle() - (rxBuf[0] * (rxBuf[6] - 0x10)));
-                }
-                else
-                {
-                    actuator_z2.set_actuator(actuator_z2.get_current_angle() + (rxBuf[0] * rxBuf[6]));
-                }
-
-                if ((rxBuf[7] - 0x10) == 1)
-                {
-                        analogWrite(MOTOR_IN2, 0);
-                        analogWrite(MOTOR_IN1, 160);
-                        delay(30);
-                        analogWrite(MOTOR_IN1, 0);
-                        analogWrite(MOTOR_IN2, 0);
-                }
-                else if (rxBuf[7] == 1)
-                {
-                        analogWrite(MOTOR_IN1, 0);
-                        analogWrite(MOTOR_IN2, 255);
-                        delay(35);
-                        analogWrite(MOTOR_IN1, 0);
-                        analogWrite(MOTOR_IN2, 0);
-                }
-                G1(MANUAL_ACCELERATION);
-                break;
-            }
-        }
-    }
-    return true;
-}
-
-// Mega2560 setup
-void setup() {
-    // Start Serial Monitor
+//
+void setup()
+{
     Serial.begin(115200);
-
-    // Start CANBus
-    // Initialize MCP2515 running at 8MHz with a baudrate of 500kb/s and the masks and filters disabled.
     if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
-        Serial.println(F("MCP2515 Initialized Successfully!"));
+        Serial.println("MCP2515 Activated");
     else
-        Serial.println(F("Error Initializing MCP2515..."));
-    pinMode(CAN0_INT, INPUT);
+        Serial.println("MCP2515 Failed");
 
-    
-    CAN0.init_Mask(0, 0, 0x00AF0000);                // Init first mask...
+    pinMode(INT_PIN, INPUT);                       // Setting pin 2 for /INT input
+
+
+    CAN0.init_Mask(0, 0, 0x00FF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00A00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00A10000);                // Init second filter...
-
-    CAN0.init_Mask(1, 0, 0x00AF0000);                // Init second mask... 
+    CAN0.init_Mask(1, 0, 0x00FF0000);                // Init second mask... 
     CAN0.init_Filt(2, 0, 0x00A20000);                // Init third filter...
     CAN0.init_Filt(3, 0, 0x00A30000);                // Init fouth filter...
-    
+    CAN0.init_Filt(4, 0, 0x00A40000);                // Init fifth filter...
+    CAN0.init_Filt(5, 0, 0x00A50000);                // Init sixth filter...
+
     /*
     CAN0.init_Mask(0, 0, 0x00BF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00B00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00B10000);                // Init second filter...
-
-    CAN0.init_Mask(1, 0, 0x00BF0000);                // Init second mask... 
+    CAN0.init_Mask(1, 0, 0x00BF0000);                // Init second mask...
     CAN0.init_Filt(2, 0, 0x00B20000);                // Init third filter...
     CAN0.init_Filt(3, 0, 0x00B30000);                // Init fouth filter...
+    CAN0.init_Filt(4, 0, 0x00B40000);                // Init fifth filter...
+    CAN0.init_Filt(5, 0, 0x00B50000);                // Init sixth filter...
     */
-    CAN0.setMode(MCP_NORMAL);                     // Set operation mode to normal so the MCP2515 sends acks to received data.
-    
-    //Serial.println(F("initialization done."));
+
+    CAN0.setMode(MCP_NORMAL);                // Change to normal mode to allow messages to be transmitted
+    attachInterrupt(digitalPinToInterrupt(2), MSGBuff, FALLING);
 
     // Pin qssignements for stepper motor drivers
     pinMode(ENA_x1, OUTPUT);
@@ -419,94 +143,58 @@ void setup() {
     pinMode(MOTOR_IN2, OUTPUT);
 
     // Set starting angle for the actuators
-    actuator_x1.set_current_angle(0xB4);
-    actuator_y1.set_current_angle(0xB4);
-    actuator_z1.set_current_angle(0x5A);
-    actuator_x2.set_current_angle(0xB4);
-    actuator_y2.set_current_angle(0xB4);
-    actuator_z2.set_current_angle(0xB4);
+    axis1.set_current_angle(0xB4);
+    axis2.set_current_angle(0xB4);
+    axis3.set_current_angle(0x5A);
+    axis4.set_current_angle(0xB4);
+    axis5.set_current_angle(0xB4);
+    axis6.set_current_angle(0xB4);
     //Serial.end();
 }
 
-// Main loop - Calls CANBUS
-void loop() {
-    //actuator_x1.set_actuator(110);
-    //actuator_y1.set_actuator(110);
-    //G1(400);
-    //actuator_x1.set_actuator(250);
-    //actuator_y1.set_actuator(250);
-    //G1(400);
-    
-    CANBUS();
-}
+//
+void run(uint16_t acceleration)
+{
+    axis1.move();
+    axis2.move();
+    axis3.move();
+    axis4.move();
+    axis5.move();
+    axis6.move();
 
-/*
-****************************************************
-*   Function: G0()                                 *
-*    - Each actuator moves one at a time starting  *
-*      from the bottom up                          *
-*   Parameters: void                               *
-*                                                  *
-*   Returns: void                                  *
-****************************************************
-*/
-/*
-void G0(void) {
+    uint32_t index = 0;
 
-}
-*/
+    digitalWrite(DIR_x1, axis1.get_actuator_direction());
+    digitalWrite(DIR_y1, axis2.get_actuator_direction());
+    digitalWrite(DIR_z1, axis3.get_actuator_direction());
+    digitalWrite(DIR_x2, axis4.get_actuator_direction());
+    digitalWrite(DIR_y2, axis5.get_actuator_direction());
+    digitalWrite(DIR_z2, axis6.get_actuator_direction());
 
-/*
-****************************************************
-*   Function: G1()                                 *
-*    - Each actuator starts moving at the same     *
-*      time and finishes when individual distance  *
-*      is reached                                  *
-*   Parameters: Acceleration                       *
-*                                                  *
-*   Returns: void                                  *
-****************************************************
-*/
-void G1(int acceleration) {
-    int long index = 0;
-    digitalWrite(DIR_x1, actuator_x1.get_actuator_direction());
-    digitalWrite(DIR_y1, actuator_y1.get_actuator_direction());
-    digitalWrite(DIR_z1, actuator_z1.get_actuator_direction());
-    digitalWrite(DIR_x2, actuator_x2.get_actuator_direction());
-    digitalWrite(DIR_y2, actuator_y2.get_actuator_direction());
-    digitalWrite(DIR_z2, actuator_z2.get_actuator_direction());
-
-    actuator_x1.move();
-    actuator_y1.move();
-    actuator_z1.move();
-    actuator_x2.move();
-    actuator_y2.move();
-    actuator_z2.move();
-
-    while ((index < actuator_x1.get_steps_to_move()) || (index < actuator_y1.get_steps_to_move()) || (index < actuator_z1.get_steps_to_move())
-        || (index < actuator_x2.get_steps_to_move()) || (index < actuator_y2.get_steps_to_move()) || (index < actuator_z2.get_steps_to_move()))
+    while ((index < axis1.get_steps_to_move()) || (index < axis2.get_steps_to_move()) || (index < axis3.get_steps_to_move())
+        || (index < axis4.get_steps_to_move()) || (index < axis5.get_steps_to_move()) || (index < axis6.get_steps_to_move()))
     {
-        if ((index < actuator_x1.get_steps_to_move())) {
+        if ((index < axis1.get_steps_to_move())) {
             //actuator_x1.enable_actuator = true;
             digitalWrite(SPD_x1, true);
         }
-        if ((index < actuator_x2.get_steps_to_move())) {
+        if ((index < axis4.get_steps_to_move())) {
             //actuator_x2.enable_actuator = true;
             digitalWrite(SPD_x2, true);
         }
-        if (index < actuator_y1.get_steps_to_move()) {
+        if (index < axis2.get_steps_to_move()) {
             // actuator_y1.enable_actuator = false;
             digitalWrite(SPD_y1, true);
         }
-        if (index < actuator_y2.get_steps_to_move()) {
+        if (index < axis5.get_steps_to_move()) {
             // actuator_y2.enable_actuator = false;
             digitalWrite(SPD_y2, true);
         }
-        if (index < actuator_z1.get_steps_to_move()) {
+        if (index < axis3.get_steps_to_move()) {
             //actuator_z1.enable_actuator = false;
             digitalWrite(SPD_z1, true);
         }
-        if (index < actuator_z2.get_steps_to_move()) {
+        if (index < axis6.get_steps_to_move()) {
             //actuator_z2.enable_actuator = false;
             digitalWrite(SPD_z2, true);
         }
@@ -521,50 +209,357 @@ void G1(int acceleration) {
         delayMicroseconds(SPEED_ADJUSTED_G1 + acceleration);
         index++;
         if (acceleration > 0) {
-            acceleration = acceleration - 1;
+            acceleration--;
         }
     }
-    return;
+    axis1.set_steps_to_move(0);
+    axis2.set_steps_to_move(0);
+    axis3.set_steps_to_move(0);
+    axis4.set_steps_to_move(0);
+    axis5.set_steps_to_move(0);
+    axis6.set_steps_to_move(0);
 }
 
-/*
-****************************************************
-*   Function: G2()                       *
-*    - Each actuator moves and finishes at same    *
-*    - time by modifying speed of each actuator    *
-*                                                  *
-*   Parameters: nonev                              *
-*                                                  *
-*   Returns: void                                  *
-****************************************************
-*/
-/*
-void G2(void) {
-        // Under Development
-    int step_array[NUMBER_OF_ACTUATORS] = { actuator_x1.get_steps_to_move(), actuator_y1.get_steps_to_move(), actuator_z1.get_steps_to_move(), actuator_x2.get_steps_to_move(), actuator_y2.get_steps_to_move(), actuator_z2.get_steps_to_move() };
-    int long index = 0;
-    int greatest_value = step_array[0];
-    for (int i = 1; i < NUMBER_OF_ACTUATORS; i++)
+// Attached to interupt - Incoming CAN Bus frame saved to buffer
+void MSGBuff()
+{
+    CAN0.readMsgBuf(&rxId, &len, rxBuf);      // Read data: len = data length, buf = data byte(s)
+
+    /*
+    Serial.print("ID: ");
+    Serial.print(rxId, 16);
+    Serial.print(" MSG: ");
+    Serial.print(rxBuf[0]);
+    Serial.print(" ");
+    Serial.print(rxBuf[1]);
+    Serial.print(" ");
+    Serial.print(rxBuf[2]);
+    Serial.print(" ");
+    Serial.print(rxBuf[3]);
+    Serial.print(" ");
+    Serial.print(rxBuf[4]);
+    Serial.print(" ");
+    Serial.print(rxBuf[5]);
+    Serial.print(" ");
+    Serial.print(rxBuf[6]);
+    Serial.print(" ");
+    Serial.println(rxBuf[7]);
+    Serial.println("MSGBuff");
+    */
+
+    CANBuffer* node = new CANBuffer(rxId, rxBuf);
+    buffer.InsertHead(node);
+}
+
+// Read messages from buffer
+void readMSG()
+{
+    if (buffer.GetSize() > 0)
     {
-        if (greatest_value < step_array[i])
-            greatest_value = step_array[i];
-    }
-    double k_constant = greatest_value * PULSE_SPEED;
-    actuator_x1.set_actuator_speed((k_constant / (step_array[0] * STEPS_PER_DEGREE)));
-    actuator_y1.set_actuator_speed((k_constant / (step_array[1] * STEPS_PER_DEGREE)));
-    actuator_z1.set_actuator_speed((k_constant / (step_array[2] * STEPS_PER_DEGREE)));
-    actuator_x2.set_actuator_speed((k_constant / (step_array[3] * STEPS_PER_DEGREE)));
-    actuator_y2.set_actuator_speed((k_constant / (step_array[4] * STEPS_PER_DEGREE)));
-    actuator_z2.set_actuator_speed((k_constant / (step_array[5] * STEPS_PER_DEGREE)));
+        // Retrieve the first message received
+        uint16_t ID = buffer.GetTail()->getID();
+        uint8_t* MSG = buffer.GetTail()->getMessage();
 
-    while (index < greatest_value) {
-        digitalWrite(SPD_x1, true);
-        digitalWrite(SPD_x2, true);
-        delayMicroseconds(PULSE_SPEED);
-        digitalWrite(SPD_x1, false);
-        digitalWrite(SPD_x2, false);
-        delayMicroseconds(SPEED_ADJUSTED_G2);
-        index++;
+        /*
+        Serial.print("ID ");
+        Serial.print(ID, HEX);
+        Serial.print(" MSG ");
+        Serial.print(MSG[0], HEX);
+        Serial.print(" ");
+        Serial.print(MSG[1], HEX);
+        Serial.print(" ");
+        Serial.print(MSG[2], HEX);
+        Serial.print(" ");
+        Serial.print(MSG[3], HEX);
+        Serial.print(" ");
+        Serial.print(MSG[4], HEX);
+        Serial.print(" ");
+        Serial.print(MSG[5], HEX);
+        Serial.print(" ");
+        Serial.print(MSG[6], HEX);
+        Serial.print(" ");
+        Serial.println(MSG[7], HEX);
+        */
+        // 
+        controller(ID, MSG);
+        buffer.RemoveTail();
     }
 }
-*/
+
+//
+void controller(uint16_t ID, uint8_t* MSG)
+{
+    //
+    byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+    Serial.print("ID: ");
+    Serial.print(ID, HEX);
+    Serial.print(" MSG: ");
+    Serial.print(MSG[0], HEX);
+    Serial.print(" ");
+    Serial.print(MSG[1], HEX);
+    Serial.print(" ");
+    Serial.print(MSG[2], HEX);
+    Serial.print(" ");
+    Serial.print(MSG[3], HEX);
+    Serial.print(" ");
+    Serial.print(MSG[4], HEX);
+    Serial.print(" ");
+    Serial.print(MSG[5], HEX);
+    Serial.print(" ");
+    Serial.print(MSG[6], HEX);
+    Serial.print(" ");
+    Serial.println(MSG[7], HEX);
+
+    //
+    switch (ID)
+    {
+    case RXID_CONTROL:
+        /*=========================================================
+                    Return Current Lower Axis Positions
+        ===========================================================*/
+        if (MSG[1] == 0x01)
+        {
+            uint16_t temp;
+
+            returnData[0] = 0x01;
+            temp = axis1.get_current_angle();
+            if (temp > 255)
+            {
+                returnData[2] = 0x01;
+                returnData[3] = temp - 256;
+            }
+            else
+            {
+                returnData[3] = temp;
+            }
+            temp = axis2.get_current_angle();
+            if (temp > 255)
+            {
+                returnData[4] = 0x01;
+                returnData[5] = temp - 256;
+            }
+            else
+            {
+                returnData[5] = temp;
+            }
+            temp = axis3.get_current_angle();
+            if (temp > 255)
+            {
+                returnData[6] = 0x01;
+                returnData[7] = temp - 256;
+            }
+            else
+            {
+                returnData[7] = temp;
+            }
+            // Return axis positions for bottom three axis
+            CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+
+            returnData[0] = 0x00;
+            returnData[1] = 0x00;
+            returnData[2] = 0x00;
+            returnData[3] = 0x00;
+            returnData[4] = 0x00;
+            returnData[5] = 0x00;
+            returnData[6] = 0x00;
+            returnData[7] = 0x00;
+            break;
+        }
+
+        /*=========================================================
+                    Return Current Higher Axis Positions
+        ===========================================================*/
+        if (MSG[1] == 0x02)
+        {
+            uint8_t temp;
+
+            returnData[0] = 0x02;
+            temp = axis4.get_current_angle();
+            if (temp > 255)
+            {
+                returnData[2] = 0x01;
+                returnData[3] = temp - 256;
+            }
+            else
+            {
+                returnData[3] = temp;
+            }
+            temp = axis5.get_current_angle();
+            if (temp > 255)
+            {
+                returnData[4] = 0x01;
+                returnData[5] = temp - 256;
+            }
+            else
+            {
+                returnData[5] = temp;
+            }
+            temp = axis6.get_current_angle();
+            if (temp > 255)
+            {
+                returnData[6] = 0x01;
+                returnData[7] = temp - 256;
+            }
+            else
+            {
+                returnData[7] = temp;
+            }
+            // Return axis positions for top three axis
+            CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+
+            returnData[0] = 0x00;
+            returnData[1] = 0x00;
+            returnData[2] = 0x00;
+            returnData[3] = 0x00;
+            returnData[4] = 0x00;
+            returnData[5] = 0x00;
+            returnData[6] = 0x00;
+            returnData[7] = 0x00;
+            break;
+        }
+
+        /*=========================================================
+                    Set Axis Angles to Current Postion
+        ===========================================================*/
+        if (MSG[1] == 0x03)
+        {
+            axis1.set_current_angle(0xB4);
+            axis2.set_current_angle(0xB4);
+            axis3.set_current_angle(0x5A);
+            axis4.set_current_angle(0xB4);
+            axis5.set_current_angle(0xB4);
+            axis6.set_current_angle(0xB4);
+        }
+
+        /*=========================================================
+                    Open/Close Grip
+        ===========================================================*/
+        if (MSG[6] == 0x01)
+        {
+            open_grip();
+        }
+        if (MSG[7] == 0x01)
+        {
+            close_grip();
+        }
+
+        /*=========================================================
+                    Executes Move
+        ===========================================================*/
+        if (MSG[0] == 0x01)
+        {
+            returnData[1] = 0x03;
+            CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+            run(ANGLE_ACCELERATION);
+        }
+        break;
+    case RXID_LOWER:
+        // Set next angles for bottom three axis
+        if ((MSG[2] + MSG[3]) > 0) {
+            axis1.set_actuator(MSG[2] + MSG[3]);
+        }
+        if ((MSG[4] + MSG[5]) > 0) {
+            axis2.set_actuator(MSG[4] + MSG[5]);
+        }
+        if ((MSG[6] + MSG[7]) > 0) {
+            axis3.set_actuator(MSG[6] + MSG[7]);
+        }
+        break;
+
+    case RXID_UPPER:
+        // Set next angles for top three axis
+        if ((MSG[2] + MSG[3]) > 0) {
+            axis4.set_actuator(MSG[2] + MSG[3]);
+        }
+        if ((MSG[4] + MSG[5]) > 0) {
+            axis5.set_actuator(MSG[4] + MSG[5]);
+        }
+        if ((MSG[6] + MSG[7]) > 0) {
+            axis6.set_actuator(MSG[6] + MSG[7]);
+        }
+        break;
+
+    case RX_MANUAL:
+        // Manual Control
+        if ((MSG[1] - 0x10) == 1)
+        {
+            axis1.set_actuator(axis1.get_current_angle() - (MSG[0] * (MSG[1] - 0x10)));
+        }
+        else
+        {
+            axis1.set_actuator(axis1.get_current_angle() + (MSG[0] * MSG[1]));
+        }
+
+        if ((MSG[2] - 0x10) == 1)
+        {
+            axis2.set_actuator(axis2.get_current_angle() - (MSG[0] * (MSG[2] - 0x10)));
+        }
+        else
+        {
+            axis2.set_actuator(axis2.get_current_angle() + (MSG[0] * MSG[2]));
+        }
+
+        if ((MSG[3] - 0x10) == 1)
+        {
+            axis3.set_actuator(axis3.get_current_angle() - (MSG[0] * (MSG[3] - 0x10)));
+        }
+        else
+        {
+            axis3.set_actuator(axis3.get_current_angle() + (MSG[0] * MSG[3]));
+        }
+
+        if ((MSG[4] - 0x10) == 1)
+        {
+            axis4.set_actuator(axis4.get_current_angle() - (MSG[0] * (MSG[4] - 0x10)));
+        }
+        else
+        {
+            axis4.set_actuator(axis4.get_current_angle() + (MSG[0] * MSG[4]));
+        }
+
+        if ((MSG[5] - 0x10) == 1)
+        {
+            axis5.set_actuator(axis5.get_current_angle() - (MSG[0] * (MSG[5] - 0x10)));
+        }
+        else
+        {
+            axis5.set_actuator(axis5.get_current_angle() + (MSG[0] * MSG[5]));
+        }
+
+        if ((MSG[6] - 0x10) == 1)
+        {
+            axis6.set_actuator(axis6.get_current_angle() - (MSG[0] * (MSG[6] - 0x10)));
+        }
+        else
+        {
+            axis6.set_actuator(axis6.get_current_angle() + (MSG[0] * MSG[6]));
+        }
+
+        if ((MSG[7] - 0x10) == 1)
+        {
+            analogWrite(MOTOR_IN2, 0);
+            analogWrite(MOTOR_IN1, 160);
+            delay(30);
+            analogWrite(MOTOR_IN1, 0);
+            analogWrite(MOTOR_IN2, 0);
+        }
+        else if (MSG[7] == 1)
+        {
+            analogWrite(MOTOR_IN1, 0);
+            analogWrite(MOTOR_IN2, 255);
+            delay(35);
+            analogWrite(MOTOR_IN1, 0);
+            analogWrite(MOTOR_IN2, 0);
+        }
+        run(MANUAL_ACCELERATION);
+        break;
+    }
+}
+
+// the loop function runs over and over again until power down or reset
+void loop()
+{
+    readMSG();
+}
+

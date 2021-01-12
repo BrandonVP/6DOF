@@ -14,9 +14,9 @@
 #define ENA_z1  7  // Enable
 
 // Actuator x2
-#define SPD_x2  4  // Pulse
-#define DIR_x2  3  // Direction
-#define ENA_x2  2  // Enable
+#define SPD_x2  14  // Pulse
+#define DIR_x2  15  // Direction
+#define ENA_x2  16  // Enable
 
 // Actuator y2
 #define SPD_y2  24 // Pulse
