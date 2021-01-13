@@ -23,11 +23,10 @@
 #define MANUAL_ACCELERATION 1
 
 // Global settings
-constexpr auto PULSE_SPEED = 135;           // Lower number produces higher RPM
+constexpr auto PULSE_SPEED = 135;                            // Lower number produces higher RPM
 constexpr auto SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
 constexpr auto SPEED_ADJUSTED_G1 = PULSE_SPEED - 24;         // SPEED_ADJUSTED compensates time used for CPU to run logic in G1 loop
 constexpr auto SPEED_ADJUSTED_G2 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
-
 
 //
 long unsigned int rxId;
@@ -46,7 +45,6 @@ Actuator axis3;
 Actuator axis4;
 Actuator axis5;
 Actuator axis6;
-
 
 // Open grip is true
 bool isGrip = true;
@@ -89,7 +87,7 @@ void setup()
 
     pinMode(INT_PIN, INPUT);                       // Setting pin 2 for /INT input
 
-
+   
     CAN0.init_Mask(0, 0, 0x00FF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00A00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00A10000);                // Init second filter...
@@ -98,7 +96,7 @@ void setup()
     CAN0.init_Filt(3, 0, 0x00A30000);                // Init fouth filter...
     CAN0.init_Filt(4, 0, 0x00A40000);                // Init fifth filter...
     CAN0.init_Filt(5, 0, 0x00A50000);                // Init sixth filter...
-
+   
     /*
     CAN0.init_Mask(0, 0, 0x00BF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00B00000);                // Init first filter...
@@ -111,7 +109,7 @@ void setup()
     */
 
     CAN0.setMode(MCP_NORMAL);                // Change to normal mode to allow messages to be transmitted
-    attachInterrupt(digitalPinToInterrupt(2), MSGBuff, FALLING);
+    attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 
     // Pin qssignements for stepper motor drivers
     pinMode(ENA_x1, OUTPUT);
@@ -149,12 +147,14 @@ void setup()
     axis4.set_current_angle(0xB4);
     axis5.set_current_angle(0xB4);
     axis6.set_current_angle(0xB4);
-    //Serial.end();
+    Serial.end();
 }
 
 //
 void run(uint16_t acceleration)
 {
+    //Serial.println("run");
+
     axis1.move();
     axis2.move();
     axis3.move();
@@ -223,8 +223,17 @@ void run(uint16_t acceleration)
 // Attached to interupt - Incoming CAN Bus frame saved to buffer
 void MSGBuff()
 {
-    CAN0.readMsgBuf(&rxId, &len, rxBuf);      // Read data: len = data length, buf = data byte(s)
+    //Serial.println("MSGBuff");
+    // Read incoming message
+    CAN0.readMsgBuf(&rxId, &len, rxBuf);      
 
+    // Create object to store message
+    CANBuffer* node = new CANBuffer(rxId, rxBuf);
+
+    // Insert object into linked list
+    buffer.InsertHead(node);
+
+    // Debug
     /*
     Serial.print("ID: ");
     Serial.print(rxId, 16);
@@ -246,9 +255,6 @@ void MSGBuff()
     Serial.println(rxBuf[7]);
     Serial.println("MSGBuff");
     */
-
-    CANBuffer* node = new CANBuffer(rxId, rxBuf);
-    buffer.InsertHead(node);
 }
 
 // Read messages from buffer
@@ -256,10 +262,21 @@ void readMSG()
 {
     if (buffer.GetSize() > 0)
     {
+        //Serial.println("readMSG()");
+
         // Retrieve the first message received
         uint16_t ID = buffer.GetTail()->getID();
         uint8_t* MSG = buffer.GetTail()->getMessage();
 
+        // Send the message to the controller for processing
+        controller(ID, MSG);
+
+        // Delete used object from list
+        buffer.RemoveTail();
+
+        
+
+        // Debug
         /*
         Serial.print("ID ");
         Serial.print(ID, HEX);
@@ -280,18 +297,19 @@ void readMSG()
         Serial.print(" ");
         Serial.println(MSG[7], HEX);
         */
-        // 
-        controller(ID, MSG);
-        buffer.RemoveTail();
     }
+    return;
 }
 
-//
+// Processes incoming CAN Frames
 void controller(uint16_t ID, uint8_t* MSG)
 {
-    //
+    //Serial.println("controller");
+    // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
+    // Debug
+    /*
     Serial.print("ID: ");
     Serial.print(ID, HEX);
     Serial.print(" MSG: ");
@@ -310,8 +328,9 @@ void controller(uint16_t ID, uint8_t* MSG)
     Serial.print(MSG[6], HEX);
     Serial.print(" ");
     Serial.println(MSG[7], HEX);
+    */
 
-    //
+    // 
     switch (ID)
     {
     case RXID_CONTROL:
@@ -320,10 +339,8 @@ void controller(uint16_t ID, uint8_t* MSG)
         ===========================================================*/
         if (MSG[1] == 0x01)
         {
-            uint16_t temp;
-
-            returnData[0] = 0x01;
-            temp = axis1.get_current_angle();
+            // Get and set angles in returnData
+            uint16_t temp = axis1.get_current_angle();
             if (temp > 255)
             {
                 returnData[2] = 0x01;
@@ -353,9 +370,13 @@ void controller(uint16_t ID, uint8_t* MSG)
             {
                 returnData[7] = temp;
             }
+            // Confirmation
+            returnData[0] = 0x01;
+
             // Return axis positions for bottom three axis
             CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
 
+            // Reset returnData back to zero values
             returnData[0] = 0x00;
             returnData[1] = 0x00;
             returnData[2] = 0x00;
@@ -364,6 +385,7 @@ void controller(uint16_t ID, uint8_t* MSG)
             returnData[5] = 0x00;
             returnData[6] = 0x00;
             returnData[7] = 0x00;
+
             break;
         }
 
@@ -451,6 +473,7 @@ void controller(uint16_t ID, uint8_t* MSG)
         {
             returnData[1] = 0x03;
             CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+            delay(10);
             run(ANGLE_ACCELERATION);
         }
         break;

@@ -30,7 +30,6 @@ void Actuator::set_actuator(int new_pos_x1) {
 	// Calculate distance to move
 	int dis_to_move = new_pos_x1 - currentAngle;
 	if (dis_to_move < 0) {
-		//dis_to_move = dis_to_move - (2 * dis_to_move);
 		dis_to_move = dis_to_move * ((dis_to_move > 0) - (dis_to_move < 0));
 	}
 
