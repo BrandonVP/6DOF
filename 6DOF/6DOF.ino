@@ -109,7 +109,6 @@ void setup()
     */
 
     CAN0.setMode(MCP_NORMAL);                // Change to normal mode to allow messages to be transmitted
-    attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 
     // Pin qssignements for stepper motor drivers
     pinMode(ENA_x1, OUTPUT);
@@ -148,6 +147,7 @@ void setup()
     axis5.set_current_angle(0xB4);
     axis6.set_current_angle(0xB4);
     Serial.end();
+    attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 }
 
 //
@@ -223,7 +223,6 @@ void run(uint16_t acceleration)
 // Attached to interupt - Incoming CAN Bus frame saved to buffer
 void MSGBuff()
 {
-    //Serial.println("MSGBuff");
     // Read incoming message
     CAN0.readMsgBuf(&rxId, &len, rxBuf);      
 
@@ -232,29 +231,6 @@ void MSGBuff()
 
     // Insert object into linked list
     buffer.InsertHead(node);
-
-    // Debug
-    /*
-    Serial.print("ID: ");
-    Serial.print(rxId, 16);
-    Serial.print(" MSG: ");
-    Serial.print(rxBuf[0]);
-    Serial.print(" ");
-    Serial.print(rxBuf[1]);
-    Serial.print(" ");
-    Serial.print(rxBuf[2]);
-    Serial.print(" ");
-    Serial.print(rxBuf[3]);
-    Serial.print(" ");
-    Serial.print(rxBuf[4]);
-    Serial.print(" ");
-    Serial.print(rxBuf[5]);
-    Serial.print(" ");
-    Serial.print(rxBuf[6]);
-    Serial.print(" ");
-    Serial.println(rxBuf[7]);
-    Serial.println("MSGBuff");
-    */
 }
 
 // Read messages from buffer
@@ -585,4 +561,3 @@ void loop()
 {
     readMSG();
 }
-
