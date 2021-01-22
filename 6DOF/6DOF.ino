@@ -22,6 +22,13 @@
 #define ANGLE_ACCELERATION 500
 #define MANUAL_ACCELERATION 1
 
+#define axis1StartingAngle 0xB4
+#define axis2StartingAngle 0xB4
+#define axis3StartingAngle 0x5A
+#define axis4StartingAngle 0xB4
+#define axis5StartingAngle 0xB4
+#define axis6StartingAngle 0xB4
+
 // Global settings
 constexpr auto PULSE_SPEED = 135;                            // Lower number produces higher RPM
 constexpr auto SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
@@ -38,13 +45,13 @@ MCP_CAN CAN0(49);
 // Linked list of nodes for a program
 LinkedList<CANBuffer*> buffer;
 
-// Actuator objects
-Actuator axis1;
-Actuator axis2;
-Actuator axis3;
-Actuator axis4;
-Actuator axis5;
-Actuator axis6;
+// Actuator objects - (min angle, max angle, current angle)
+Actuator axis1(0, 360, axis1StartingAngle);
+Actuator axis2(0, 360, axis2StartingAngle);
+Actuator axis3(0, 360, axis3StartingAngle);
+Actuator axis4(0, 360, axis4StartingAngle);
+Actuator axis5(0, 360, axis5StartingAngle);
+Actuator axis6(0, 360, axis6StartingAngle);
 
 // Open grip is true
 bool isGrip = true;
@@ -79,6 +86,9 @@ void open_grip() {
 //
 void setup()
 {
+    // PSU needs time to power up or Mega will hang during setup
+    delay(4000);
+
     Serial.begin(115200);
     if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
         Serial.println("MCP2515 Activated");
@@ -140,12 +150,7 @@ void setup()
     pinMode(MOTOR_IN2, OUTPUT);
 
     // Set starting angle for the actuators
-    axis1.set_current_angle(0xB4);
-    axis2.set_current_angle(0xB4);
-    axis3.set_current_angle(0x5A);
-    axis4.set_current_angle(0xB4);
-    axis5.set_current_angle(0xB4);
-    axis6.set_current_angle(0xB4);
+
     Serial.end();
     attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 }

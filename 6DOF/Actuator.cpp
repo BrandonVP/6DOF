@@ -13,6 +13,18 @@
 										  // 1/32 steps = 675.555~
 										  // 1/16 steps = 337.777~
 
+Actuator::Actuator()
+{
+
+}
+
+Actuator::Actuator(uint16_t max, uint16_t min, uint16_t startingAngle)
+{
+	maxAngle = max;
+	minAngle = min;
+	currentAngle = startingAngle;
+}
+
 // new_pos_x1 is an angle
 void Actuator::set_actuator(int new_pos_x1) {
 	if (readyToMove == true)

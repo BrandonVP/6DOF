@@ -14,6 +14,8 @@ class Actuator
 protected:
 	int currentAngle;        // Angle of actuators position in degrees
 	int nextAngle;			 // Angle moved to current once sent to G1-3
+	int maxAngle = 360;
+	int minAngle = 0;
 	unsigned int long stepsToMove;   // Set quantity of steps to move in next cycle
 	double actuatorSpeed;    // Set individual actuator speed
 	bool actuatorDirection;  // Current direction of actuator
@@ -22,6 +24,8 @@ protected:
 
 public:
 	void move();
+	Actuator();
+	Actuator(uint16_t, uint16_t, uint16_t);
 	void set_actuator(int new_pos_x1);
 	void set_current_angle(int current_angle);
 	int get_current_angle();
