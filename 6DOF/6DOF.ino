@@ -97,7 +97,7 @@ void setup()
 
     pinMode(INT_PIN, INPUT);                       // Setting pin 2 for /INT input
 
-   
+    
     CAN0.init_Mask(0, 0, 0x00FF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00A00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00A10000);                // Init second filter...
@@ -106,8 +106,8 @@ void setup()
     CAN0.init_Filt(3, 0, 0x00A30000);                // Init fouth filter...
     CAN0.init_Filt(4, 0, 0x00A40000);                // Init fifth filter...
     CAN0.init_Filt(5, 0, 0x00A50000);                // Init sixth filter...
-   
-    /*
+    
+   /*
     CAN0.init_Mask(0, 0, 0x00BF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00B00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00B10000);                // Init second filter...
@@ -116,7 +116,7 @@ void setup()
     CAN0.init_Filt(3, 0, 0x00B30000);                // Init fouth filter...
     CAN0.init_Filt(4, 0, 0x00B40000);                // Init fifth filter...
     CAN0.init_Filt(5, 0, 0x00B50000);                // Init sixth filter...
-    */
+   */
 
     CAN0.setMode(MCP_NORMAL);                // Change to normal mode to allow messages to be transmitted
 
@@ -238,6 +238,12 @@ void MSGBuff()
     buffer.InsertHead(node);
 }
 
+// Delete pointer after poping object
+void deleteObj(CANBuffer *obj)
+{
+    delete obj;
+}
+
 // Read messages from buffer
 void readMSG()
 {
@@ -252,7 +258,10 @@ void readMSG()
         // Send the message to the controller for processing
         controller(ID, MSG);
 
-        // Delete used object from list
+        // Delete CANBuffer object
+        deleteObj(buffer.GetTail());
+
+        // Delete position in linkedlist from list
         buffer.RemoveTail();
 
         
