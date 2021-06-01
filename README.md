@@ -5,6 +5,8 @@ This project started as my junior college project that I have continued to build
 
 This portion of the code runs on the Mega2560 and controls either of the two arms. It is currently being rewritten to improvement movement and convert to non-blocking code.
 
+IDE: I am using visual studios with vMicro plugin 
+
 
 ![alt text](https://github.com/BrandonVP/6DOF/blob/master/s1.jpg)
 
