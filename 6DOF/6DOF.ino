@@ -13,7 +13,7 @@ Replace delayMicroseconds with system timer
 
 Design way for arm movements of different lengths end together
 
-Update actuator angles while moving
+Limiting Min / Max actuator movements
 ===========================================================
     End Todo List
 =========================================================*/
@@ -63,14 +63,16 @@ Actuator axis4(0, 360, axis4StartingAngle);
 Actuator axis5(0, 360, axis5StartingAngle);
 Actuator axis6(0, 360, axis6StartingAngle);
 
+
 bool hasAcceleration = true;
 bool runSetup = false;
 bool runProg = false;
 bool lowerSendPos = false;
 bool upperSendPos = false;
 bool delayState = true;
-uint16_t acceleration = 0;
 
+uint16_t count = 0;
+uint16_t acceleration = 0;
 uint32_t maxStep = 0;
 uint32_t runIndex = 0;
 
@@ -218,6 +220,7 @@ void run()
         maxStep = findLargest();
         runSetup = false;
         runIndex = 0;
+        count = 0;
     }
 
     delayMicroseconds(PULSE_SPEED_2 + acceleration);
@@ -227,32 +230,68 @@ void run()
         {
             digitalWrite(DIR_x1, axis1.get_actuator_direction());
             digitalWrite(SPD_x1, true);
+            (count == 337) && (axis1.increment_current_angle());
         }
+        else if (runIndex == axis1.get_steps_to_move())
+        {
+            axis1.move();
+        }
+
         if ((runIndex < axis4.get_steps_to_move()))
         {
             digitalWrite(DIR_x2, axis4.get_actuator_direction());
             digitalWrite(SPD_x2, true);
+            (count == 337) && (axis4.increment_current_angle());
         }
+        else if (runIndex == axis4.get_steps_to_move())
+        {
+            axis4.move();
+        }
+
         if (runIndex < axis2.get_steps_to_move())
         {
             digitalWrite(DIR_y1, axis2.get_actuator_direction());
             digitalWrite(SPD_y1, true);
+            (count == 337) && (axis2.increment_current_angle());
         }
+        else if (runIndex == axis2.get_steps_to_move())
+        {
+            axis2.move();
+        }
+
         if (runIndex < axis5.get_steps_to_move())
         {
             digitalWrite(DIR_y2, axis5.get_actuator_direction());
             digitalWrite(SPD_y2, true);
+            (count == 337) && (axis5.increment_current_angle());
         }
+        else if (runIndex == axis5.get_steps_to_move())
+        {
+            axis5.move();
+        }
+
         if (runIndex < axis3.get_steps_to_move())
         {
             digitalWrite(DIR_z1, axis3.get_actuator_direction());
             digitalWrite(SPD_z1, true);
+            (count == 337) && (axis3.increment_current_angle());
         }
+        else if (runIndex == axis3.get_steps_to_move())
+        {
+            axis3.move();
+        }
+
         if (runIndex < axis6.get_steps_to_move())
         {
             digitalWrite(DIR_z2, axis6.get_actuator_direction());
             digitalWrite(SPD_z2, true);
+            (count == 337) && (axis6.increment_current_angle());
         }
+        else if (runIndex == axis6.get_steps_to_move())
+        {
+            axis6.move();
+        }
+
         delayState = false;
     }
     if (( runIndex < maxStep ) && ( delayState == false ))
@@ -277,6 +316,7 @@ void run()
             }
         }
         delayState = true;
+        (count > 337) ? count = 0 : count++;
     }
     if(runIndex >= maxStep)
     {

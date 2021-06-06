@@ -67,8 +67,10 @@ void Actuator::set_current_angle(uint16_t currentAngle) {
 	this->currentAngle = currentAngle;
 }
 
-void Actuator::increment_current_angle() {
-	this->currentAngle++;
+bool Actuator::increment_current_angle() 
+{
+	(this->get_actuator_direction()) ? this->currentAngle++ : this->currentAngle--;
+	return true;
 }
 
 int Actuator::get_current_angle() {
