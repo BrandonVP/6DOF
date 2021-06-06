@@ -1,0 +1,32 @@
+#######################################
+# Syntax Coloring Map LinkedList
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+LinkedList	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+GetSize	KEYWORD2
+GetHead	KEYWORD2
+GetTail	KEYWORD2
+GetAt	KEYWORD2
+InsertHead	KEYWORD2
+InsertTail	KEYWORD2
+InsertAt	KEYWORD2
+ReplaceHead	KEYWORD2
+ReplaceTail	KEYWORD2
+ReplaceAt	KEYWORD2
+RemoveHead	KEYWORD2
+RemoveTail	KEYWORD2
+RemoveAt	KEYWORD2
+Clear	KEYWORD2
+FromArray	KEYWORD2
+ToArray	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################

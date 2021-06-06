@@ -4,6 +4,20 @@
  Author:	Brandon Van Pelt
 */
 
+/*=========================================================
+    Todo List
+===========================================================
+Replace delayMicroseconds with system timer
+- Holding millis() value with int is too slow
+- Register uint32_t shows 0 when assigned millis()
+
+Design way for arm movements of different lengths end together
+
+Update actuator angles while moving
+===========================================================
+    End Todo List
+=========================================================*/
+
 #include "Actuator.h"
 #include "CANBuffer.h"
 #include <LinkedListLib.h>
@@ -18,9 +32,7 @@
 
 #define CS_PIN    49
 #define INT_PIN   2
-#define LED_CAN_TX LED_BUILTIN
-#define ANGLE_ACCELERATION 500
-#define MANUAL_ACCELERATION 1
+#define ANGLE_ACCELERATION 400
 
 #define axis1StartingAngle 0xB4
 #define axis2StartingAngle 0xB4
@@ -29,11 +41,9 @@
 #define axis5StartingAngle 0xB4
 #define axis6StartingAngle 0xB4
 
-// Global settings
-constexpr auto PULSE_SPEED = 135;                            // Lower number produces higher RPM
-constexpr auto SPEED_ADJUSTED_G0 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
-constexpr auto SPEED_ADJUSTED_G1 = PULSE_SPEED - 24;         // SPEED_ADJUSTED compensates time used for CPU to run logic in G1 loop
-constexpr auto SPEED_ADJUSTED_G2 = PULSE_SPEED - 10;         // SPEED_ADJUSTED compensates time used for CPU to run logic
+// Balance stepper on / off state
+constexpr auto PULSE_SPEED_1 = 140;                           
+constexpr auto PULSE_SPEED_2 = 10;                          
 
 //
 long unsigned int rxId;
@@ -52,6 +62,17 @@ Actuator axis3(0, 360, axis3StartingAngle);
 Actuator axis4(0, 360, axis4StartingAngle);
 Actuator axis5(0, 360, axis5StartingAngle);
 Actuator axis6(0, 360, axis6StartingAngle);
+
+bool hasAcceleration = true;
+bool runSetup = false;
+bool runProg = false;
+bool lowerSendPos = false;
+bool upperSendPos = false;
+bool delayState = true;
+uint16_t acceleration = 0;
+
+uint32_t maxStep = 0;
+uint32_t runIndex = 0;
 
 // Open grip is true
 bool isGrip = true;
@@ -89,6 +110,9 @@ void setup()
     // PSU needs time to power up or Mega will hang during setup
     delay(4000);
 
+    // Disable interrupts
+    cli();
+
     Serial.begin(115200);
     if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
         Serial.println("MCP2515 Activated");
@@ -97,7 +121,6 @@ void setup()
 
     pinMode(INT_PIN, INPUT);                       // Setting pin 2 for /INT input
 
-    
     CAN0.init_Mask(0, 0, 0x00FF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00A00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00A10000);                // Init second filter...
@@ -106,7 +129,7 @@ void setup()
     CAN0.init_Filt(3, 0, 0x00A30000);                // Init fouth filter...
     CAN0.init_Filt(4, 0, 0x00A40000);                // Init fifth filter...
     CAN0.init_Filt(5, 0, 0x00A50000);                // Init sixth filter...
-    
+
    /*
     CAN0.init_Mask(0, 0, 0x00BF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00B00000);                // Init first filter...
@@ -118,7 +141,7 @@ void setup()
     CAN0.init_Filt(5, 0, 0x00B50000);                // Init sixth filter...
    */
 
-    CAN0.setMode(MCP_NORMAL);                // Change to normal mode to allow messages to be transmitted
+    CAN0.setMode(MCP_NORMAL);  // Change to normal mode to allow messages to be transmitted
 
     // Pin qssignements for stepper motor drivers
     pinMode(ENA_x1, OUTPUT);
@@ -149,87 +172,136 @@ void setup()
     pinMode(MOTOR_IN1, OUTPUT);
     pinMode(MOTOR_IN2, OUTPUT);
 
-    // Set starting angle for the actuators
-
-    Serial.end();
+    //Serial.end();
     attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
+
+    // Enable interrupts
+    sei();
 }
 
 //
-void run(uint16_t acceleration)
+uint32_t findLargest()
 {
-    //Serial.println("run");
-
-    axis1.move();
-    axis2.move();
-    axis3.move();
-    axis4.move();
-    axis5.move();
-    axis6.move();
-
-    uint32_t index = 0;
-
-    digitalWrite(DIR_x1, axis1.get_actuator_direction());
-    digitalWrite(DIR_y1, axis2.get_actuator_direction());
-    digitalWrite(DIR_z1, axis3.get_actuator_direction());
-    digitalWrite(DIR_x2, axis4.get_actuator_direction());
-    digitalWrite(DIR_y2, axis5.get_actuator_direction());
-    digitalWrite(DIR_z2, axis6.get_actuator_direction());
-
-    while ((index < axis1.get_steps_to_move()) || (index < axis2.get_steps_to_move()) || (index < axis3.get_steps_to_move())
-        || (index < axis4.get_steps_to_move()) || (index < axis5.get_steps_to_move()) || (index < axis6.get_steps_to_move()))
+    uint32_t temp = axis1.get_steps_to_move();
+    if (axis2.get_steps_to_move() > temp)
     {
-        if ((index < axis1.get_steps_to_move())) {
-            //actuator_x1.enable_actuator = true;
+        temp = axis2.get_steps_to_move();
+    }
+    if (axis3.get_steps_to_move() > temp)
+    {
+        temp = axis3.get_steps_to_move();
+    }
+    if (axis4.get_steps_to_move() > temp)
+    {
+        temp = axis4.get_steps_to_move();
+    }
+    if (axis5.get_steps_to_move() > temp)
+    {
+        temp = axis5.get_steps_to_move();
+    }
+    if (axis6.get_steps_to_move() > temp)
+    {
+        temp = axis6.get_steps_to_move();
+    }
+    return temp;
+}
+
+//
+void run()
+{
+    if (runProg == false)
+    {
+        return;
+    }
+    if (runSetup)
+    {
+        maxStep = findLargest();
+        runSetup = false;
+        runIndex = 0;
+    }
+
+    delayMicroseconds(PULSE_SPEED_2 + acceleration);
+    if (runIndex < maxStep && delayState == true )
+    {
+        if ((runIndex < axis1.get_steps_to_move()))
+        {
+            digitalWrite(DIR_x1, axis1.get_actuator_direction());
             digitalWrite(SPD_x1, true);
         }
-        if ((index < axis4.get_steps_to_move())) {
-            //actuator_x2.enable_actuator = true;
+        if ((runIndex < axis4.get_steps_to_move()))
+        {
+            digitalWrite(DIR_x2, axis4.get_actuator_direction());
             digitalWrite(SPD_x2, true);
         }
-        if (index < axis2.get_steps_to_move()) {
-            // actuator_y1.enable_actuator = false;
+        if (runIndex < axis2.get_steps_to_move())
+        {
+            digitalWrite(DIR_y1, axis2.get_actuator_direction());
             digitalWrite(SPD_y1, true);
         }
-        if (index < axis5.get_steps_to_move()) {
-            // actuator_y2.enable_actuator = false;
+        if (runIndex < axis5.get_steps_to_move())
+        {
+            digitalWrite(DIR_y2, axis5.get_actuator_direction());
             digitalWrite(SPD_y2, true);
         }
-        if (index < axis3.get_steps_to_move()) {
-            //actuator_z1.enable_actuator = false;
+        if (runIndex < axis3.get_steps_to_move())
+        {
+            digitalWrite(DIR_z1, axis3.get_actuator_direction());
             digitalWrite(SPD_z1, true);
         }
-        if (index < axis6.get_steps_to_move()) {
-            //actuator_z2.enable_actuator = false;
+        if (runIndex < axis6.get_steps_to_move())
+        {
+            digitalWrite(DIR_z2, axis6.get_actuator_direction());
             digitalWrite(SPD_z2, true);
         }
-
-        delayMicroseconds(PULSE_SPEED + acceleration);
+        delayState = false;
+    }
+    if (( runIndex < maxStep ) && ( delayState == false ))
+    {
+        delayMicroseconds(PULSE_SPEED_1 + acceleration);
         digitalWrite(SPD_x1, false);
         digitalWrite(SPD_x2, false);
         digitalWrite(SPD_y1, false);
         digitalWrite(SPD_y2, false);
         digitalWrite(SPD_z1, false);
         digitalWrite(SPD_z2, false);
-        delayMicroseconds(SPEED_ADJUSTED_G1 + acceleration);
-        index++;
-        if (acceleration > 0) {
-            acceleration--;
+
+        runIndex++;
+        if (hasAcceleration == true)
+        {
+            if (acceleration > 0 && maxStep - runIndex > ANGLE_ACCELERATION) {
+                acceleration--;
+            }
+            else if (maxStep - runIndex <= ANGLE_ACCELERATION)
+            {
+                acceleration++;
+            }
         }
+        delayState = true;
     }
-    axis1.set_steps_to_move(0);
-    axis2.set_steps_to_move(0);
-    axis3.set_steps_to_move(0);
-    axis4.set_steps_to_move(0);
-    axis5.set_steps_to_move(0);
-    axis6.set_steps_to_move(0);
+    if(runIndex >= maxStep)
+    {
+        axis1.move();
+        axis2.move();
+        axis3.move();
+        axis4.move();
+        axis5.move();
+        axis6.move();
+        runProg = false;
+    }
 }
 
 // Attached to interupt - Incoming CAN Bus frame saved to buffer
 void MSGBuff()
 {
     // Read incoming message
-    CAN0.readMsgBuf(&rxId, &len, rxBuf);      
+    CAN0.readMsgBuf(&rxId, &len, rxBuf);
+
+    if ((rxId == 0xA0 || rxId == 0xB0) && (rxBuf[1] == 0x1 || rxBuf[1] == 0x02))
+    {
+        lowerSendPos = true;
+        upperSendPos = true;
+        return;
+    }
 
     // Create object to store message
     CANBuffer* node = new CANBuffer(rxId, rxBuf);
@@ -239,7 +311,7 @@ void MSGBuff()
 }
 
 // Delete pointer after poping object
-void deleteObj(CANBuffer *obj)
+void deleteObj(CANBuffer* obj)
 {
     delete obj;
 }
@@ -247,10 +319,8 @@ void deleteObj(CANBuffer *obj)
 // Read messages from buffer
 void readMSG()
 {
-    if (buffer.GetSize() > 0)
+    if (runProg == false && buffer.GetSize() > 0)
     {
-        //Serial.println("readMSG()");
-
         // Retrieve the first message received
         uint16_t ID = buffer.GetTail()->getID();
         uint8_t* MSG = buffer.GetTail()->getMessage();
@@ -263,171 +333,124 @@ void readMSG()
 
         // Delete position in linkedlist from list
         buffer.RemoveTail();
-
-        
-
-        // Debug
-        /*
-        Serial.print("ID ");
-        Serial.print(ID, HEX);
-        Serial.print(" MSG ");
-        Serial.print(MSG[0], HEX);
-        Serial.print(" ");
-        Serial.print(MSG[1], HEX);
-        Serial.print(" ");
-        Serial.print(MSG[2], HEX);
-        Serial.print(" ");
-        Serial.print(MSG[3], HEX);
-        Serial.print(" ");
-        Serial.print(MSG[4], HEX);
-        Serial.print(" ");
-        Serial.print(MSG[5], HEX);
-        Serial.print(" ");
-        Serial.print(MSG[6], HEX);
-        Serial.print(" ");
-        Serial.println(MSG[7], HEX);
-        */
     }
-    return;
 }
 
-// Processes incoming CAN Frames
+// Send Lower Axis Positions
+void sendLowerPos()
+{
+    if (lowerSendPos == true)
+    {
+        byte returnData[8] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+        // Get and set angles in returnData
+        uint16_t temp = axis1.get_current_angle();
+        if (temp > 255)
+        {
+            returnData[2] = 0x01;
+            returnData[3] = temp - 256;
+        }
+        else
+        {
+            returnData[3] = temp;
+        }
+        temp = axis2.get_current_angle();
+        if (temp > 255)
+        {
+            returnData[4] = 0x01;
+            returnData[5] = temp - 256;
+        }
+        else
+        {
+            returnData[5] = temp;
+        }
+        temp = axis3.get_current_angle();
+        if (temp > 255)
+        {
+            returnData[6] = 0x01;
+            returnData[7] = temp - 256;
+        }
+        else
+        {
+            returnData[7] = temp;
+        }
+
+        // Return axis positions for bottom three axis
+        CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+        lowerSendPos = false;
+    }
+}
+
+// Send Upper Axis Positions
+void sendUpperPos()
+{
+    if (upperSendPos == true)
+    {
+        byte returnData[8] = { 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+        uint8_t temp;
+
+        temp = axis4.get_current_angle();
+        if (temp > 255)
+        {
+            returnData[2] = 0x01;
+            returnData[3] = temp - 256;
+        }
+        else
+        {
+            returnData[3] = temp;
+        }
+        temp = axis5.get_current_angle();
+        if (temp > 255)
+        {
+            returnData[4] = 0x01;
+            returnData[5] = temp - 256;
+        }
+        else
+        {
+            returnData[5] = temp;
+        }
+        temp = axis6.get_current_angle();
+        if (temp > 255)
+        {
+            returnData[6] = 0x01;
+            returnData[7] = temp - 256;
+        }
+        else
+        {
+            returnData[7] = temp;
+        }
+        // Return axis positions for top three axis
+        CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+
+        upperSendPos = false;
+    }
+}
+
+// Process incoming CAN Frames
 void controller(uint16_t ID, uint8_t* MSG)
 {
-    //Serial.println("controller");
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-
-    // Debug
-    /*
-    Serial.print("ID: ");
-    Serial.print(ID, HEX);
-    Serial.print(" MSG: ");
-    Serial.print(MSG[0], HEX);
-    Serial.print(" ");
-    Serial.print(MSG[1], HEX);
-    Serial.print(" ");
-    Serial.print(MSG[2], HEX);
-    Serial.print(" ");
-    Serial.print(MSG[3], HEX);
-    Serial.print(" ");
-    Serial.print(MSG[4], HEX);
-    Serial.print(" ");
-    Serial.print(MSG[5], HEX);
-    Serial.print(" ");
-    Serial.print(MSG[6], HEX);
-    Serial.print(" ");
-    Serial.println(MSG[7], HEX);
-    */
 
     // 
     switch (ID)
     {
     case RXID_CONTROL:
         /*=========================================================
-                    Return Current Lower Axis Positions
+                    Send Current Lower Axis Positions
         ===========================================================*/
         if (MSG[1] == 0x01)
         {
-            // Get and set angles in returnData
-            uint16_t temp = axis1.get_current_angle();
-            if (temp > 255)
-            {
-                returnData[2] = 0x01;
-                returnData[3] = temp - 256;
-            }
-            else
-            {
-                returnData[3] = temp;
-            }
-            temp = axis2.get_current_angle();
-            if (temp > 255)
-            {
-                returnData[4] = 0x01;
-                returnData[5] = temp - 256;
-            }
-            else
-            {
-                returnData[5] = temp;
-            }
-            temp = axis3.get_current_angle();
-            if (temp > 255)
-            {
-                returnData[6] = 0x01;
-                returnData[7] = temp - 256;
-            }
-            else
-            {
-                returnData[7] = temp;
-            }
-            // Confirmation
-            returnData[0] = 0x01;
-
-            // Return axis positions for bottom three axis
-            CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-
-            // Reset returnData back to zero values
-            returnData[0] = 0x00;
-            returnData[1] = 0x00;
-            returnData[2] = 0x00;
-            returnData[3] = 0x00;
-            returnData[4] = 0x00;
-            returnData[5] = 0x00;
-            returnData[6] = 0x00;
-            returnData[7] = 0x00;
-
+            lowerSendPos = true;
             break;
         }
 
         /*=========================================================
-                    Return Current Higher Axis Positions
+                    Send Current Higher Axis Positions
         ===========================================================*/
         if (MSG[1] == 0x02)
         {
-            uint8_t temp;
-
-            returnData[0] = 0x02;
-            temp = axis4.get_current_angle();
-            if (temp > 255)
-            {
-                returnData[2] = 0x01;
-                returnData[3] = temp - 256;
-            }
-            else
-            {
-                returnData[3] = temp;
-            }
-            temp = axis5.get_current_angle();
-            if (temp > 255)
-            {
-                returnData[4] = 0x01;
-                returnData[5] = temp - 256;
-            }
-            else
-            {
-                returnData[5] = temp;
-            }
-            temp = axis6.get_current_angle();
-            if (temp > 255)
-            {
-                returnData[6] = 0x01;
-                returnData[7] = temp - 256;
-            }
-            else
-            {
-                returnData[7] = temp;
-            }
-            // Return axis positions for top three axis
-            CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-
-            returnData[0] = 0x00;
-            returnData[1] = 0x00;
-            returnData[2] = 0x00;
-            returnData[3] = 0x00;
-            returnData[4] = 0x00;
-            returnData[5] = 0x00;
-            returnData[6] = 0x00;
-            returnData[7] = 0x00;
+            upperSendPos = true;
             break;
         }
 
@@ -463,8 +486,10 @@ void controller(uint16_t ID, uint8_t* MSG)
         {
             returnData[1] = 0x03;
             CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-            delay(10);
-            run(ANGLE_ACCELERATION);
+            runProg = true;
+            runSetup = true;
+            acceleration = ANGLE_ACCELERATION;
+            hasAcceleration = true;
         }
         break;
     case RXID_LOWER:
@@ -565,13 +590,165 @@ void controller(uint16_t ID, uint8_t* MSG)
             analogWrite(MOTOR_IN1, 0);
             analogWrite(MOTOR_IN2, 0);
         }
-        run(MANUAL_ACCELERATION);
+        runProg = true;
+        runSetup = true;
+        hasAcceleration = false;
+        acceleration = 0;
+        run();
         break;
     }
 }
 
-// the loop function runs over and over again until power down or reset
+//
 void loop()
 {
+    // Check if there are any CAN Bus messages in the buffer
     readMSG();
+ 
+    // Send out the current actuator angles
+    sendLowerPos();
+    sendUpperPos();
+
+    // Execute current commands
+    run();
 }
+
+/*
+void setupMove()
+{
+    uint32_t temp = findLargest();
+    Serial.print("Largest: ");
+    Serial.println(temp);
+    if (axis1.get_steps_to_move() > 0)
+    {
+        delay1 = (temp / axis1.get_steps_to_move());
+    }
+    else
+    {
+        delay1 = 0;
+    }
+
+    if (axis2.get_steps_to_move() > 0)
+    {
+        delay2 = (temp / axis2.get_steps_to_move());
+    }
+    else
+    {
+        delay2 = 0;
+    }
+
+    if (axis3.get_steps_to_move() > 0)
+    {
+        //delay3 = (temp / axis3.get_steps_to_move());
+    }
+    else
+    {
+        //delay3 = 0;
+    }
+
+    if (axis4.get_steps_to_move() > 0)
+    {
+        //delay4 = (temp / axis4.get_steps_to_move());
+    }
+    else
+    {
+        //delay4 = 0;
+    }
+
+    if (axis5.get_steps_to_move() > 0)
+    {
+        //delay5 = (temp / axis5.get_steps_to_move());
+    }
+    else
+    {
+        //delay5 = 0;
+    }
+
+    if (axis6.get_steps_to_move() > 0)
+    {
+        //delay6 = (temp / axis6.get_steps_to_move());
+    }
+    else
+    {
+        //delay6 = 0;
+    }
+
+
+    axis1.move();
+    axis2.move();
+    axis3.move();
+    axis4.move();
+    axis5.move();
+    axis6.move();
+
+    digitalWrite(DIR_x1, axis1.get_actuator_direction());
+    digitalWrite(DIR_y1, axis2.get_actuator_direction());
+    digitalWrite(DIR_z1, axis3.get_actuator_direction());
+    digitalWrite(DIR_x2, axis4.get_actuator_direction());
+    digitalWrite(DIR_y2, axis5.get_actuator_direction());
+    digitalWrite(DIR_z2, axis6.get_actuator_direction());
+
+    runProg = true;
+}
+
+
+void moveAxis1()
+{
+    if (runProg == false)
+    {
+        return;
+    }
+    if (axis1.get_steps_to_move() > 0)
+    {
+        digitalWrite(DIR_y1, axis1.get_actuator_direction());
+
+        if (millis() - timer1 > PULSE_SPEED + 40 && a1On == false)
+        {
+            a1On = true;
+            axis1.reduceSteps();
+            // pulse high
+            digitalWrite(SPD_x1, true);
+            timer1 = millis();
+        }
+        if (millis() - timer1 > SPEED_ADJUSTED_G1 && a1On == true)
+        {
+            a1On = false;
+            // pulse low
+            digitalWrite(SPD_x1, false);
+            timer1 = millis();
+        }
+    }
+}
+
+void moveAxis2()
+{
+    if (runProg == false)
+    {
+        return;
+    }
+
+    if (axis2.get_steps_to_move() > 0)
+    {
+        digitalWrite(DIR_x1, axis2.get_actuator_direction());
+        if (millis() - timer2 > PULSE_SPEED && a2On == false)
+        {
+            a2On = true;
+            axis2.reduceSteps();
+            // pulse high
+            digitalWrite(SPD_x2, true);
+            timer2 = millis();
+        }
+        if (millis() - timer2 > SPEED_ADJUSTED_G1 && a2On == true)
+        {
+            a2On = false;
+            // pulse low
+            digitalWrite(SPD_x2, false);
+            timer2 = millis();
+        }
+    }
+    else
+    {
+
+    }
+}
+*/

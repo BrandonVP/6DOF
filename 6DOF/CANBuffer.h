@@ -21,7 +21,6 @@ class CANBuffer
 	 uint16_t getID();
 	 void setMessage(uint8_t*);
 	 uint8_t* getMessage();
-
 };
 
 
