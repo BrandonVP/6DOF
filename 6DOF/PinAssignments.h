@@ -1,3 +1,6 @@
+#define CS_PIN    49
+#define INT_PIN   2
+
 // Actuator x1
 #define SPD_x1  11  // Pulse
 #define DIR_x1  12  // Direction

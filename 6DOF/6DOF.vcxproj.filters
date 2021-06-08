@@ -52,8 +52,5 @@
     <Text Include="sample.txt">
       <Filter>Misc Files</Filter>
     </Text>
-    <Text Include="save.txt">
-      <Filter>Misc Files</Filter>
-    </Text>
   </ItemGroup>
 </Project>

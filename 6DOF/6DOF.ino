@@ -10,10 +10,9 @@
 Replace delayMicroseconds with system timer
 - Holding millis() value with int is too slow
 - Register uint32_t shows 0 when assigned millis()
+- Try using system timer
 
 Design way for arm movements of different lengths end together
-
-Limiting Min / Max actuator movements
 ===========================================================
     End Todo List
 =========================================================*/
@@ -27,11 +26,10 @@ Limiting Min / Max actuator movements
 #include <SPI.h>
 
 // Select channel IDs
-#include "ch1.h"
-//#include "ch2.h"
+//#include "ch1.h"
+#include "ch2.h"
 
-#define CS_PIN    49
-#define INT_PIN   2
+
 #define ANGLE_ACCELERATION 400
 
 #define axis1StartingAngle 0xB4
@@ -56,13 +54,12 @@ MCP_CAN CAN0(49);
 LinkedList<CANBuffer*> buffer;
 
 // Actuator objects - (min angle, max angle, current angle)
-Actuator axis1(0, 360, axis1StartingAngle);
-Actuator axis2(0, 360, axis2StartingAngle);
-Actuator axis3(0, 360, axis3StartingAngle);
-Actuator axis4(0, 360, axis4StartingAngle);
-Actuator axis5(0, 360, axis5StartingAngle);
-Actuator axis6(0, 360, axis6StartingAngle);
-
+Actuator axis1(160, 200, axis1StartingAngle);
+Actuator axis2(160, 200, axis2StartingAngle);
+Actuator axis3(45, 135, axis3StartingAngle);
+Actuator axis4(160, 200, axis4StartingAngle);
+Actuator axis5(160, 200, axis5StartingAngle);
+Actuator axis6(160, 200, axis6StartingAngle);
 
 bool hasAcceleration = true;
 bool runSetup = false;
@@ -70,14 +67,12 @@ bool runProg = false;
 bool lowerSendPos = false;
 bool upperSendPos = false;
 bool delayState = true;
+bool isGripOpen = true;
 
 uint16_t count = 0;
 uint16_t acceleration = 0;
 uint32_t maxStep = 0;
 uint32_t runIndex = 0;
-
-// Open grip is true
-bool isGrip = true;
 
 // Close grip profile
 void close_grip() {
@@ -122,7 +117,7 @@ void setup()
         Serial.println("MCP2515 Failed");
 
     pinMode(INT_PIN, INPUT);                       // Setting pin 2 for /INT input
-
+    /*
     CAN0.init_Mask(0, 0, 0x00FF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00A00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00A10000);                // Init second filter...
@@ -131,8 +126,8 @@ void setup()
     CAN0.init_Filt(3, 0, 0x00A30000);                // Init fouth filter...
     CAN0.init_Filt(4, 0, 0x00A40000);                // Init fifth filter...
     CAN0.init_Filt(5, 0, 0x00A50000);                // Init sixth filter...
-
-   /*
+    */
+   
     CAN0.init_Mask(0, 0, 0x00BF0000);                // Init first mask...
     CAN0.init_Filt(0, 0, 0x00B00000);                // Init first filter...
     CAN0.init_Filt(1, 0, 0x00B10000);                // Init second filter...
@@ -141,7 +136,7 @@ void setup()
     CAN0.init_Filt(3, 0, 0x00B30000);                // Init fouth filter...
     CAN0.init_Filt(4, 0, 0x00B40000);                // Init fifth filter...
     CAN0.init_Filt(5, 0, 0x00B50000);                // Init sixth filter...
-   */
+   
 
     CAN0.setMode(MCP_NORMAL);  // Change to normal mode to allow messages to be transmitted
 

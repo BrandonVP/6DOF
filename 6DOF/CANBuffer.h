@@ -23,6 +23,5 @@ class CANBuffer
 	 uint8_t* getMessage();
 };
 
-
 #endif
 
