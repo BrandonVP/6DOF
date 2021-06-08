@@ -21,7 +21,7 @@ Actuator::Actuator(uint16_t min, uint16_t max, uint16_t startingAngle)
 }
 
 // new_pos_x1 is an angle
-void Actuator::set_actuator(uint16_t new_pos_x1)
+void Actuator::set_actuator(float new_pos_x1)
 {
 
 	// Is there already a move quened?
@@ -79,7 +79,7 @@ bool Actuator::increment_current_angle()
 	return true;
 }
 
-int Actuator::get_current_angle() {
+uint16_t Actuator::get_current_angle() {
 	return currentAngle;
 }
 
@@ -87,7 +87,7 @@ void Actuator::set_steps_to_move(uint32_t stepsToMove) {
 	this->stepsToMove = stepsToMove;
 }
 
-int long Actuator::get_steps_to_move() {
+uint32_t Actuator::get_steps_to_move() {
 	return stepsToMove;
 }
 

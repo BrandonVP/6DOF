@@ -29,6 +29,7 @@ Design way for arm movements of different lengths end together
 //#include "ch1.h"
 #include "ch2.h"
 
+#define REFRESH_RATE 200
 
 #define ANGLE_ACCELERATION 400
 
@@ -73,6 +74,9 @@ uint16_t count = 0;
 uint16_t acceleration = 0;
 uint32_t maxStep = 0;
 uint32_t runIndex = 0;
+
+// Timer for current angle updates
+uint32_t timer = 0;
 
 // Close grip profile
 void close_grip() {
@@ -634,6 +638,16 @@ void controller(uint16_t ID, uint8_t* MSG)
     }
 }
 
+void updateAxisPos()
+{
+    if (millis() - timer > REFRESH_RATE)
+    {
+        upperSendPos = true;
+        lowerSendPos = true;
+        timer = millis();
+    }
+}
+
 //
 void loop()
 {
@@ -641,6 +655,7 @@ void loop()
     readMSG();
  
     // Send out the current actuator angles
+    updateAxisPos();
     sendLowerPos();
     sendUpperPos();
 
