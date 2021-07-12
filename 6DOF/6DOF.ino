@@ -78,6 +78,7 @@ bool runSetup = false;
 bool runProg = false;
 bool delayState = true;
 bool isGripOpen = true;
+bool eStopActivated = false;
 
 // Run() vars
 uint16_t count = 0;
@@ -152,6 +153,18 @@ void MSGBuff()
     {
         // Read incoming message
         CAN0.readMsgBuf(&rxId, &len, rxBuf);
+
+        if (rxBuf[1] == 0x04)
+        {
+            if (rxBuf[2] == 0x02)
+            {
+                eStopActivated = true;
+            }
+            else if (rxBuf[2] == 1)
+            {
+                eStopActivated = false;
+            }
+        }
 
         if ((rxId == 0xA0 || rxId == 0xB0) && (rxBuf[1] == 0x1 || rxBuf[1] == 0x02))
         {
@@ -416,6 +429,10 @@ void open_grip() {
 // Execute movement commands
 void run()
 {
+    if (eStopActivated)
+    {
+        return;
+    }
     if (runProg == false)
     {
         return;
