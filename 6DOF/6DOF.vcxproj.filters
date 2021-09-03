@@ -36,6 +36,9 @@
     <ClInclude Include="CANBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="can_buffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Actuator.cpp">
@@ -45,6 +48,9 @@
       <Filter>Header Files</Filter>
     </ClCompile>
     <ClCompile Include="CANBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="can_buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

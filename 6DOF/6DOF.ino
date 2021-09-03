@@ -22,8 +22,8 @@ Grips need fixed / added hardware
 =========================================================*/
 
 // Uncomment an arm for upload
-//#define ARM1 1
-#define ARM2 1
+#define ARM1
+//#define ARM2
 
 #include "Actuator.h"
 #include <mcp_can_dfs.h>
@@ -89,6 +89,9 @@ uint32_t runIndex = 0;
 // Timer for current angle updates
 uint32_t timer = 0;
 
+uint32_t waitTimer = 0;
+uint16_t waitTime = 0;
+bool waitActivated = false;
 
 /*=========================================================
     CAN Bus Buffer
@@ -235,6 +238,17 @@ void controller(uint16_t ID, uint8_t* MSG)
         }
 
         /*=========================================================
+                    Set Wait Timer
+        ===========================================================*/
+        if (MSG[1] == 0x0A)
+        {
+            uint8_t seconds = MSG[7];
+            uint8_t minutes = MSG[6];
+
+        }
+
+
+        /*=========================================================
                     Open/Close Grip
         ===========================================================*/
         if (MSG[6] == 0x01)
@@ -260,7 +274,9 @@ void controller(uint16_t ID, uint8_t* MSG)
         }
         break;
     case RXID_LOWER:
-        // Set next angles for bottom three axis
+        /*=========================================================
+               Set next angles for bottom three axis
+        ===========================================================*/
         if ((MSG[2] + MSG[3]) > 0) {
             axis1.set_actuator(MSG[2] + MSG[3]);
         }
@@ -273,7 +289,9 @@ void controller(uint16_t ID, uint8_t* MSG)
         break;
 
     case RXID_UPPER:
-        // Set next angles for top three axis
+        /*=========================================================
+               Set next angles for top three axis
+        ===========================================================*/
         if ((MSG[2] + MSG[3]) > 0) {
             axis4.set_actuator(MSG[2] + MSG[3]);
         }
@@ -286,7 +304,9 @@ void controller(uint16_t ID, uint8_t* MSG)
         break;
 
     case RX_MANUAL:
-        // Manual Control
+        /*=========================================================
+               Manual Control
+        ===========================================================*/
         if ((MSG[1] - 0x10) == 1)
         {
             axis1.set_actuator(axis1.get_current_angle() - (MSG[0] * (MSG[1] - 0x10)));
