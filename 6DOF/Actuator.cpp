@@ -4,14 +4,6 @@
 
 #include "Actuator.h"
 
-//#define STEPS_PER_ROTATION 200		  // Amount of steps needed for one NEMA stepper motor rotation
-//#define ACTUATOR_GEAR_RATIO 38		  // Gear reduction for lower actuators
-//#define ACTUATOR_GEAR_RATIO_UPPER 4  // Gear reduction for upper actuators - Needs to be determined
-//#define DRIVER_STEPS 16			  // Current driver hardware pin settings from 1 to 32. (fractions of 1/1 - 1/32)
-//#define DEGREES_IN_CIRCLE 360		  //
-#define STEPS_PER_DEGREE 337.777      //(DRIVER_STEPS * STEPS_PER_ROTATION * ACTUATOR_GEAR_RATIO) / DEGREES_IN_CIRCLE;
-										  // 1/32 steps = 675.555~
-										  // 1/16 steps = 337.777~
 
 Actuator::Actuator(uint16_t min, uint16_t max, uint16_t startingAngle)
 {
@@ -23,7 +15,6 @@ Actuator::Actuator(uint16_t min, uint16_t max, uint16_t startingAngle)
 // new_pos_x1 is an angle
 void Actuator::set_actuator(float new_pos_x1)
 {
-
 	// Is there already a move quened?
 	if (readyToMove == true) {return;}
 

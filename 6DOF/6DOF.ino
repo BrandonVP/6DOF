@@ -7,6 +7,15 @@
 /*=========================================================
     Todo List
 ===========================================================
+Document
+- Better comments and improved naming convention
+
+Determine what is locking up device
+- Stuck in loop?
+- Power problem?
+- Error?
+- CAN Hardware?
+
 Replace delayMicroseconds with system timer
 - Holding millis() value with int is too slow
 - Register uint32_t shows 0 when assigned millis()
@@ -28,8 +37,9 @@ Grips need fixed / added hardware
 #include "Actuator.h"
 #include <mcp_can_dfs.h>
 #include <mcp_can.h>
-#include "PinAssignments.h"
+#include "pinAssignments.h"
 #include <SPI.h>
+#include "can_buffer.h"
 #if defined ARM1
     #include "ch1.h"
 #endif
@@ -84,67 +94,25 @@ bool eStopActivated = false;
 uint16_t count = 0;
 uint16_t acceleration = 0;
 uint32_t maxStep = 0;
-uint32_t runIndex = 0;
+volatile uint32_t runIndex = 0;
 
 // Timer for current angle updates
 uint32_t timer = 0;
 
+// Wait function variables
 uint32_t waitTimer = 0;
-uint16_t waitTime = 0;
 bool waitActivated = false;
 
-/*=========================================================
-    CAN Bus Buffer
-===========================================================*/
-struct CANBUFFER {
-    uint16_t  id;
-    uint8_t  data[8];
-};
+// Buffer variables
+can_buffer myStack;
+CAN_Frame incoming;
+CAN_Frame buffer;
 
-CANBUFFER CAN_Buffer[BUFFER_SIZE];
-uint8_t pop_pos = 0;
-uint8_t push_pos = 0;
-uint8_t MSGInBuffer = 0;
-
-void push_Buffer()
-{
-    if (MSGInBuffer <= BUFFER_SIZE)
-    {
-        push_pos++;
-        MSGInBuffer++;
-    }
-    else
-    {
-        // Buffer is full, make some room
-        pop_Buffer();
-        push_pos++;
-    }
-
-    // Circle back to 0
-    if (push_pos > BUFFER_SIZE - 1)
-    {
-        push_pos = 0;
-    }
+int freeRam() {
+    extern int __heap_start, * __brkval;
+    int v;
+    return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 }
-
-void pop_Buffer()
-{
-    uint8_t tmp = 0;
-    // If buffer is not empty
-    if (MSGInBuffer > 0)
-    {
-        tmp = pop_pos;
-        pop_pos++;
-        MSGInBuffer--;
-    }
-
-    // circle back to 0
-    if (pop_pos > BUFFER_SIZE - 1)
-    {
-        pop_pos = 0;
-    }
-}
-
 
 /*=========================================================
     CAN Bus Traffic
@@ -176,40 +144,40 @@ void MSGBuff()
             return;
         }
 
-        CAN_Buffer[push_pos].id = rxId;
+        incoming.id = rxId;
         for (uint8_t i = 0; i < 8; i++)
         {
-            CAN_Buffer[push_pos].data[i] = rxBuf[i];
+            incoming.data[i] = rxBuf[i];
         }
-        push_Buffer();
+        myStack.push(incoming);
     }
 }
 
 // Read messages from buffer
 void readMSG()
 {
-    if (runProg == false && MSGInBuffer > 0)
+    if (runProg == false && myStack.stack_size() > 0)
     {
+        myStack.pop(&buffer);
         // Send the message to the controller for processing
-        controller(CAN_Buffer[pop_pos].id, CAN_Buffer[pop_pos].data);
-        pop_Buffer();
+        controller(buffer);
     }
 }
 
 // Process incoming CAN Frames
-void controller(uint16_t ID, uint8_t* MSG)
+void controller(CAN_Frame buffer)
 {
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
     // 
-    switch (ID)
+    switch (buffer.id)
     {
     case RXID_CONTROL:
         /*=========================================================
                     Send Current Lower Axis Positions
         ===========================================================*/
-        if (MSG[1] == 0x01)
+        if (buffer.data[1] == 0x01)
         {
             sendLowerPos();
             break;
@@ -218,7 +186,7 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                     Send Current Higher Axis Positions
         ===========================================================*/
-        if (MSG[1] == 0x02)
+        if (buffer.data[1] == 0x02)
         {
             sendUpperPos();
             break;
@@ -227,7 +195,7 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                     Set Axis Angles to Current Postion
         ===========================================================*/
-        if (MSG[1] == 0x03)
+        if (buffer.data[1] == 0x03)
         {
             axis1.set_current_angle(0xB4);
             axis2.set_current_angle(0xB4);
@@ -240,10 +208,10 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                     Set Wait Timer
         ===========================================================*/
-        if (MSG[1] == 0x0A)
+        if (buffer.data[1] == 0x0A)
         {
-            uint8_t seconds = MSG[7];
-            uint8_t minutes = MSG[6];
+            uint8_t seconds = buffer.data[7];
+            uint8_t minutes = buffer.data[6];
 
         }
 
@@ -251,11 +219,11 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                     Open/Close Grip
         ===========================================================*/
-        if (MSG[6] == 0x01)
+        if (buffer.data[6] == 0x01)
         {
             open_grip();
         }
-        if (MSG[7] == 0x01)
+        if (buffer.data[7] == 0x01)
         {
             close_grip();
         }
@@ -263,7 +231,7 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                     Executes Move
         ===========================================================*/
-        if (MSG[0] == 0x01)
+        if (buffer.data[0] == 0x01)
         {
             returnData[1] = 0x03;
             CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
@@ -277,14 +245,14 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                Set next angles for bottom three axis
         ===========================================================*/
-        if ((MSG[2] + MSG[3]) > 0) {
-            axis1.set_actuator(MSG[2] + MSG[3]);
+        if ((buffer.data[2] + buffer.data[3]) > 0) {
+            axis1.set_actuator(buffer.data[2] + buffer.data[3]);
         }
-        if ((MSG[4] + MSG[5]) > 0) {
-            axis2.set_actuator(MSG[4] + MSG[5]);
+        if ((buffer.data[4] + buffer.data[5]) > 0) {
+            axis2.set_actuator(buffer.data[4] + buffer.data[5]);
         }
-        if ((MSG[6] + MSG[7]) > 0) {
-            axis3.set_actuator(MSG[6] + MSG[7]);
+        if ((buffer.data[6] + buffer.data[7]) > 0) {
+            axis3.set_actuator(buffer.data[6] + buffer.data[7]);
         }
         break;
 
@@ -292,14 +260,14 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                Set next angles for top three axis
         ===========================================================*/
-        if ((MSG[2] + MSG[3]) > 0) {
-            axis4.set_actuator(MSG[2] + MSG[3]);
+        if ((buffer.data[2] + buffer.data[3]) > 0) {
+            axis4.set_actuator(buffer.data[2] + buffer.data[3]);
         }
-        if ((MSG[4] + MSG[5]) > 0) {
-            axis5.set_actuator(MSG[4] + MSG[5]);
+        if ((buffer.data[4] + buffer.data[5]) > 0) {
+            axis5.set_actuator(buffer.data[4] + buffer.data[5]);
         }
-        if ((MSG[6] + MSG[7]) > 0) {
-            axis6.set_actuator(MSG[6] + MSG[7]);
+        if ((buffer.data[6] + buffer.data[7]) > 0) {
+            axis6.set_actuator(buffer.data[6] + buffer.data[7]);
         }
         break;
 
@@ -307,77 +275,75 @@ void controller(uint16_t ID, uint8_t* MSG)
         /*=========================================================
                Manual Control
         ===========================================================*/
-        if ((MSG[1] - 0x10) == 1)
+        if ((buffer.data[1] - 0x10) == 1)
         {
-            axis1.set_actuator(axis1.get_current_angle() - (MSG[0] * (MSG[1] - 0x10)));
+            axis1.set_actuator(axis1.get_current_angle() - (buffer.data[0] * (buffer.data[1] - 0x10)));
         }
         else
         {
-            axis1.set_actuator(axis1.get_current_angle() + (MSG[0] * MSG[1]));
+            axis1.set_actuator(axis1.get_current_angle() + (buffer.data[0] * buffer.data[1]));
         }
 
-        if ((MSG[2] - 0x10) == 1)
+        if ((buffer.data[2] - 0x10) == 1)
         {
-            axis2.set_actuator(axis2.get_current_angle() - (MSG[0] * (MSG[2] - 0x10)));
+            axis2.set_actuator(axis2.get_current_angle() - (buffer.data[0] * (buffer.data[2] - 0x10)));
         }
         else
         {
-            axis2.set_actuator(axis2.get_current_angle() + (MSG[0] * MSG[2]));
+            axis2.set_actuator(axis2.get_current_angle() + (buffer.data[0] * buffer.data[2]));
         }
 
-        if ((MSG[3] - 0x10) == 1)
+        if ((buffer.data[3] - 0x10) == 1)
         {
-            axis3.set_actuator(axis3.get_current_angle() - (MSG[0] * (MSG[3] - 0x10)));
+            axis3.set_actuator(axis3.get_current_angle() - (buffer.data[0] * (buffer.data[3] - 0x10)));
         }
         else
         {
-            axis3.set_actuator(axis3.get_current_angle() + (MSG[0] * MSG[3]));
+            axis3.set_actuator(axis3.get_current_angle() + (buffer.data[0] * buffer.data[3]));
         }
 
-        if ((MSG[4] - 0x10) == 1)
+        if ((buffer.data[4] - 0x10) == 1)
         {
-            axis4.set_actuator(axis4.get_current_angle() - (MSG[0] * (MSG[4] - 0x10)));
+            axis4.set_actuator(axis4.get_current_angle() - (buffer.data[0] * (buffer.data[4] - 0x10)));
         }
         else
         {
-            axis4.set_actuator(axis4.get_current_angle() + (MSG[0] * MSG[4]));
+            axis4.set_actuator(axis4.get_current_angle() + (buffer.data[0] * buffer.data[4]));
         }
 
-        if ((MSG[5] - 0x10) == 1)
+        if ((buffer.data[5] - 0x10) == 1)
         {
-            axis5.set_actuator(axis5.get_current_angle() - (MSG[0] * (MSG[5] - 0x10)));
+            axis5.set_actuator(axis5.get_current_angle() - (buffer.data[0] * (buffer.data[5] - 0x10)));
         }
         else
         {
-            axis5.set_actuator(axis5.get_current_angle() + (MSG[0] * MSG[5]));
+            axis5.set_actuator(axis5.get_current_angle() + (buffer.data[0] * buffer.data[5]));
         }
 
-        if ((MSG[6] - 0x10) == 1)
+        if ((buffer.data[6] - 0x10) == 1)
         {
-            axis6.set_actuator(axis6.get_current_angle() - (MSG[0] * (MSG[6] - 0x10)));
+            axis6.set_actuator(axis6.get_current_angle() - (buffer.data[0] * (buffer.data[6] - 0x10)));
         }
         else
         {
-            axis6.set_actuator(axis6.get_current_angle() + (MSG[0] * MSG[6]));
+            axis6.set_actuator(axis6.get_current_angle() + (buffer.data[0] * buffer.data[6]));
         }
 
-        if ((MSG[7] - 0x10) == 1)
+        if ((buffer.data[7] - 0x10) == 1)
         {
             analogWrite(MOTOR_IN2, 0);
             analogWrite(MOTOR_IN1, 160);
             delay(30);
             analogWrite(MOTOR_IN1, 0);
             analogWrite(MOTOR_IN2, 0);
-            Serial.println("A");
         }
-        else if (MSG[7] == 1)
+        else if (buffer.data[7] == 1)
         {
             analogWrite(MOTOR_IN1, 0);
             analogWrite(MOTOR_IN2, 255);
             delay(35);
             analogWrite(MOTOR_IN1, 0);
             analogWrite(MOTOR_IN2, 0);
-            Serial.println("B");
         }
         runProg = true;
         runSetup = true;
@@ -392,7 +358,7 @@ void controller(uint16_t ID, uint8_t* MSG)
 /*=========================================================
     Movement functions
 ===========================================================*/
-//
+// Finds longest distance to move from all 6 axis
 uint32_t findLargest()
 {
     uint32_t temp = axis1.get_steps_to_move();
@@ -672,7 +638,7 @@ void sendUpperPos()
 /*=========================================================
     Setup and Main loop
 ===========================================================*/
-//
+// Setup device
 void setup()
 {
     // PSU needs time to power up or Mega will hang during setup
@@ -688,9 +654,9 @@ void setup()
 
     Serial.begin(115200);
     if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
-        Serial.println("MCP2515 Activated");
+        Serial.println(F("MCP2515 Activated"));
     else
-        Serial.println("MCP2515 Failed");
+        Serial.println(F("MCP2515 Failed"));
 
     pinMode(INT_PIN, INPUT);                       // Setting pin 2 for /INT input
 
@@ -748,15 +714,18 @@ void setup()
     pinMode(MOTOR_IN1, OUTPUT);
     pinMode(MOTOR_IN2, OUTPUT);
 
-    // Interrupt is causing unstable behavior
-    //Serial.end();
+    // The interrupt makes movements very choppy
     //attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 
     // Enable interrupts
     sei();
+
+    Serial.print("Free Memory: ");
+    Serial.println(freeRam(), DEC);
+    //Serial.end();
 }
 
-//
+// Main loop
 void loop()
 {
     // Read incoming messages given highest priority
@@ -782,14 +751,6 @@ void loop()
 /*=========================================================
     Depreciated Code 
 ===========================================================*/
-// Delete pointer after poping object
-/*
-void deleteObj(CANBuffer* obj)
-{
-    delete obj;
-}
-*/
-
 /*
 void setupMove()
 {
@@ -929,31 +890,3 @@ void moveAxis2()
     }
 }
 */
-
-// MSGBuff
-    // Linked list replaced with struture and circular buffer
-
-    // Create object to store message
-    //CANBuffer* node = new CANBuffer(rxId, rxBuf);
-
-    // Insert object into linked list
-    //buffer.InsertHead(node);
-
-// ReadMSG
-    /*
-    if (runProg == false && buffer.GetSize() > 0)
-    {
-        // Retrieve the first message received
-        uint16_t ID = buffer.GetTail()->getID();
-        uint8_t* MSG = buffer.GetTail()->getMessage();
-
-        // Send the message to the controller for processing
-        controller(ID, MSG);
-
-        // Delete CANBuffer object
-        deleteObj(buffer.GetTail());
-
-        // Delete position in linkedlist from list
-        buffer.RemoveTail();
-    }
-    */

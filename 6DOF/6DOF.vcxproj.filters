@@ -33,10 +33,10 @@
     <ClInclude Include="ch2.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CANBuffer.h">
+    <ClInclude Include="can_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="can_buffer.h">
+    <ClInclude Include="common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -46,9 +46,6 @@
     </ClCompile>
     <ClCompile Include="PinAssignments.h">
       <Filter>Header Files</Filter>
-    </ClCompile>
-    <ClCompile Include="CANBuffer.cpp">
-      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="can_buffer.cpp">
       <Filter>Source Files</Filter>

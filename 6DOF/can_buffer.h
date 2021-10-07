@@ -1,9 +1,8 @@
 /*
- * buffer.h
- *
- *  Created on: Sep 3, 2021
- *      Author: bvanpelt
- */
+ Name:		buffer.h
+ Created:	9/3/2021 9:36:16 PM
+ Author:	Brandon Van Pelt
+*/
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -13,32 +12,32 @@
 #ifndef CAN_BUFFER_H_
 #define CAN_BUFFER_H_
 
-#define BUFFER_SIZE 32
-
-struct CAN_Buffer
-{
-	uint8_t data[8];
-	uint8_t length;
-    uint16_t id;
-};
-
-#ifdef	CAN_BUFFER_C_
-
-bool push(struct CAN_Buffer);
-void pop(struct CAN_Buffer *bufOut);
-uint8_t stack_size(void);
-void peek(struct *CAN_Buffer)
-void clear_buffer(void);
-
+#if defined(ARDUINO) && ARDUINO >= 100
+#include "arduino.h"
 #else
-
-
-extern bool push(struct CAN_Buffer);
-extern void pop(struct CAN_Buffer*);
-extern uint8_t stack_size(void);
-void peek(struct CAN_Buffer*);
-extern void clear_buffer(void);
+#include "WProgram.h"
 #endif
 
+#define BUFFER_SIZE 32
+
+struct CAN_Frame
+{
+	volatile uint16_t id;
+	volatile uint8_t data[8];
+};
+
+class can_buffer
+{
+private:
+	uint8_t bufferOutPtr = 0;
+	uint8_t bufferInPtr = 0;
+	struct CAN_Frame rxBuffer[BUFFER_SIZE];
+public:
+	bool push(struct CAN_Frame);
+	void pop(struct CAN_Frame* bufOut);
+	void peek(struct CAN_Frame*);
+	void clear_buffer(void);
+	uint8_t stack_size(void);
+};
 
 #endif // BUFFER_H_
