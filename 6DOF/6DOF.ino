@@ -10,29 +10,19 @@
 Document
 - Better comments and improved naming convention
 
-Determine what is locking up device
-- Stuck in loop?
-- Power problem?
-- Error?
-- CAN Hardware?
+Design way for arm movements of different lengths to end together
 
-Replace delayMicroseconds with system timer
-- Holding millis() value with int is too slow
-- Register uint32_t shows 0 when assigned millis()
-- Try using system timer
-
-Try to reduce memory usage
-
-Design way for arm movements of different lengths end together
-
-Grips need fixed / added hardware
 ===========================================================
     End Todo List
 =========================================================*/
 
 // Uncomment an arm for upload
-#define ARM1
-//#define ARM2
+#include <EEPROM.h>
+//#define ARM1
+#define ARM2
+
+// CAN Bus debug
+#define DEBUG_CANBUS
 
 #include "Actuator.h"
 #include <mcp_can_dfs.h>
@@ -66,9 +56,9 @@ constexpr auto PULSE_SPEED_1 = 140;
 constexpr auto PULSE_SPEED_2 = 10;                          
 
 // CAN Bus vars
-long unsigned int rxId;
-INT8U len = 0;
-INT8U rxBuf[8];
+volatile long unsigned int rxId;
+volatile byte len = 0;
+volatile byte rxBuf[8];
 
 MCP_CAN CAN0(49);
 
@@ -76,12 +66,14 @@ MCP_CAN CAN0(49);
 //LinkedList<CANBuffer*> buffer;
 
 // Actuator objects - (min angle, max angle, current angle)
+
 Actuator axis1(40, 320, axis1StartingAngle);
 Actuator axis2(60, 300, axis2StartingAngle);
 Actuator axis3(45, 135, axis3StartingAngle);
 Actuator axis4(160, 200, axis4StartingAngle);
 Actuator axis5(160, 200, axis5StartingAngle);
 Actuator axis6(160, 200, axis6StartingAngle);
+
 
 bool hasAcceleration = true;
 bool runSetup = false;
@@ -99,6 +91,9 @@ volatile uint32_t runIndex = 0;
 // Timer for current angle updates
 uint32_t timer = 0;
 
+uint32_t updateEEPROM = 0;
+bool isPositionSaved = false;
+
 // Wait function variables
 uint32_t waitTimer = 0;
 bool waitActivated = false;
@@ -108,6 +103,7 @@ can_buffer myStack;
 CAN_Frame incoming;
 CAN_Frame buffer;
 
+// Check RAM usage
 int freeRam() {
     extern int __heap_start, * __brkval;
     int v;
@@ -117,40 +113,47 @@ int freeRam() {
 /*=========================================================
     CAN Bus Traffic
 ===========================================================*/
-// Attached to interupt - Incoming CAN Bus frame saved to buffer
+// Incoming CAN Bus frame pushed to buffer
 void MSGBuff()
 {
-    if (!digitalRead(INT_PIN)) // If CAN0_INT pin is low, read receive buffer
-    {
-        // Read incoming message
-        CAN0.readMsgBuf(&rxId, &len, rxBuf);
+     // Read incoming message
+    CAN0.readMsgBuf(&rxId, &len, rxBuf);
+    //if (!CAN0.readMsgBuf(&rxId, &len, rxBuf))
+    //{
+        // Update axis angle backup timer
+        //updateEEPROM = millis();
+        //isPositionSaved = false;
 
+    // Estop check
         if (rxBuf[1] == 0x04)
         {
             if (rxBuf[2] == 0x02)
             {
                 eStopActivated = true;
             }
-            else if (rxBuf[2] == 1)
+            else if (rxBuf[2] == 0x01)
             {
                 eStopActivated = false;
             }
         }
 
+        /* This should not be done in ISR, use flag instead
         if ((rxId == 0xA0 || rxId == 0xB0) && (rxBuf[1] == 0x1 || rxBuf[1] == 0x02))
         {
             sendLowerPos();
             sendUpperPos();
             return;
         }
+        */
 
+        // Push message to stack
         incoming.id = rxId;
         for (uint8_t i = 0; i < 8; i++)
         {
             incoming.data[i] = rxBuf[i];
         }
         myStack.push(incoming);
-    }
+    //}
 }
 
 // Read messages from buffer
@@ -164,12 +167,33 @@ void readMSG()
     }
 }
 
+//#define DEBUG_CONTROLLER
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
 {
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-
+#if defined DEBUG_CONTROLLER
+    Serial.print("ID: ");
+    Serial.print(buffer.id, 16);
+    Serial.print("   Data: ");
+    Serial.print(buffer.data[0], 16);
+    Serial.print(" ");
+    Serial.print(buffer.data[1], 16);
+    Serial.print(" ");
+    Serial.print(buffer.data[2], 16);
+    Serial.print(" ");
+    Serial.print(buffer.data[3], 16);
+    Serial.print(" ");
+    Serial.print(buffer.data[4], 16);
+    Serial.print(" ");
+    Serial.print(buffer.data[5], 16);
+    Serial.print(" ");
+    Serial.print(buffer.data[6], 16);
+    Serial.print(" ");
+    Serial.print(buffer.data[7], 16);
+    Serial.println();
+#endif
     // 
     switch (buffer.id)
     {
@@ -386,8 +410,44 @@ uint32_t findLargest()
 }
 
 // Close grip profile
-void close_grip() {
-    uint8_t i;
+void close_grip() 
+{
+    analogWrite(MOTOR_IN2, 0);
+    for (uint16_t i = 0; i < 80; i++)
+    {
+        /*
+        if (i % 2)
+        {
+            analogWrite(MOTOR_IN1, 255);
+        }
+        else
+        {
+            analogWrite(MOTOR_IN1, 0);
+        }
+        */
+        // (i % 2) ? analogWrite(MOTOR_IN1, 255) : analogWrite(MOTOR_IN1, 0);
+        //delay(1);
+
+    }
+    for (uint8_t i = 0; i < 100; i++)
+    {
+        if (i % 2)
+        {
+            analogWrite(MOTOR_IN1, 150);
+            delay(5);
+        }
+        else
+        {
+            analogWrite(MOTOR_IN1, 0);
+            delay(25);
+        }
+        
+    }
+    
+    analogWrite(MOTOR_IN1, 0);
+    analogWrite(MOTOR_IN2, 0);
+    /*
+      uint8_t i;
     analogWrite(MOTOR_IN2, 0);
     analogWrite(MOTOR_IN1, 255);
     delay(1);
@@ -397,10 +457,23 @@ void close_grip() {
     }
     analogWrite(MOTOR_IN1, 0);
     analogWrite(MOTOR_IN2, 0);
+    */
+  
 }
 
 // Open grip profile
-void open_grip() {
+void open_grip() 
+{
+    analogWrite(MOTOR_IN1, 0);
+    for (uint16_t i = 255; i > 100; i--)
+    {
+        analogWrite(MOTOR_IN2, i);
+        delay(2);
+    }
+    analogWrite(MOTOR_IN2, 0);
+    analogWrite(MOTOR_IN1, 0);
+
+    /*
     analogWrite(MOTOR_IN1, 0);
     analogWrite(MOTOR_IN2, 255);
     delay(350);
@@ -410,6 +483,8 @@ void open_grip() {
     //}
     analogWrite(MOTOR_IN1, 0);
     analogWrite(MOTOR_IN2, 0);
+    */
+    
 }
 
 // Execute movement commands
@@ -542,13 +617,26 @@ void run()
 /*=========================================================
     Axis Pos
 ===========================================================*/
+bool swap = false;
 // Update pos on a timer
 void updateAxisPos()
 {
-    if (millis() - timer > REFRESH_RATE)
+    if (CAN0.mcp2515_tx_flag_status() && millis() - timer > REFRESH_RATE)
     {
-        sendLowerPos();
-        sendUpperPos();
+        if (swap)
+        {
+            sendLowerPos();
+            swap = !swap;
+            CAN0.mcp2515_set_tx_flag_status();
+        }
+        else
+        {
+            sendUpperPos();
+            swap = !swap;
+            CAN0.mcp2515_set_tx_flag_status();
+        }
+        
+        
         timer = millis();
     }
 }
@@ -634,6 +722,24 @@ void sendUpperPos()
     CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
 }
 
+// Save axis posistions to EMMC chip
+void saveAxisPositions()
+{
+    /*
+// TODO: Test and move to function
+if (millis() - updateEEPROM > 5000 && !isPositionSaved)
+{
+    Serial.println("Saving axis positions");
+    EEPROM.put(10, axis1.get_current_angle());
+    EEPROM.put(20, axis2.get_current_angle());
+    EEPROM.put(30, axis3.get_current_angle());
+    EEPROM.put(40, axis4.get_current_angle());
+    EEPROM.put(50, axis5.get_current_angle());
+    EEPROM.put(60, axis6.get_current_angle());
+    isPositionSaved = true;
+}
+*/
+}
 
 /*=========================================================
     Setup and Main loop
@@ -643,7 +749,7 @@ void setup()
 {
     // PSU needs time to power up or Mega will hang during setup
 #if defined ARM1
-    delay(4000);
+    delay(2000);
 #endif
 #if defined ARM2
     delay(4100);
@@ -651,14 +757,16 @@ void setup()
 
     // Disable interrupts
     cli();
-
     Serial.begin(115200);
-    if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
-        Serial.println(F("MCP2515 Activated"));
-    else
-        Serial.println(F("MCP2515 Failed"));
 
-    pinMode(INT_PIN, INPUT);                       // Setting pin 2 for /INT input
+    pinMode(INT_PIN, INPUT);
+
+   
+    if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
+        Serial.println("MCP2515 Initialized Successfully!");
+    else
+        Serial.println("Error Initializing MCP2515...");
+
 
 #if defined ARM1
     // Arm1
@@ -715,36 +823,115 @@ void setup()
     pinMode(MOTOR_IN2, OUTPUT);
 
     // The interrupt makes movements very choppy
-    //attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
+    attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 
     // Enable interrupts
     sei();
 
+    /*
     Serial.print("Free Memory: ");
     Serial.println(freeRam(), DEC);
+    uint16_t temp = 0;
+    EEPROM.get(10, temp);
+    axis1.set_current_angle(temp);
+    EEPROM.get(20, temp);
+    axis2.set_current_angle(temp);
+    EEPROM.get(30, temp);
+    axis3.set_current_angle(temp);
+    EEPROM.get(40, temp);
+    axis4.set_current_angle(temp);
+    EEPROM.get(50, temp);
+    axis5.set_current_angle(temp);
+    EEPROM.get(60, temp);
+    axis6.set_current_angle(temp);
+    */
     //Serial.end();
 }
+
+
+#if defined DEBUG_CANBUS
+uint32_t CANBusDebugTimer = 0;
+#endif
+void CANBus_Debug()
+{
+    #if defined DEBUG_CANBUS
+    const uint8_t TEC_error_register = 0x1C;
+    const uint8_t REC_error_register = 0x1D;
+    const uint8_t error_register = 0x1D;
+    const uint16_t read_register_interval = 2000;
+
+    if (millis() - CANBusDebugTimer > read_register_interval)
+    {
+        Serial.print("getError: ");
+        uint16_t result1 = CAN0.mcp2515_readRegister(error_register);
+        Serial.println(result1);
+
+        Serial.print("TEC: ");
+        uint16_t result2 = CAN0.mcp2515_readRegister(TEC_error_register);
+        Serial.println(result2);
+
+        Serial.print("REC: ");
+        uint16_t result3 = CAN0.mcp2515_readRegister(REC_error_register);
+        Serial.println(result3);
+
+        //Serial.print("Memory: ");
+        //Serial.println(freeRam());
+        /*
+        if (result1)
+        {
+            Serial.println("");
+            Serial.println("RESETING ERROR");
+            Serial.println(CAN0.getError());
+            CAN0.mcp2515_setRegister(0x2D, 0x0);
+            Serial.println(CAN0.getError());
+            Serial.println("RESETING ERROR");
+            Serial.println("");
+        }
+        if (result2)
+        {
+            Serial.println("");
+            Serial.println("RESETING RX");
+            Serial.println(CAN0.getError());
+            CAN0.mcp2515_setRegister(0x1D, 0x0);
+            Serial.println(CAN0.getError());
+            Serial.println("RESETING RX");
+            Serial.println("");
+        }
+
+        if (result3)
+        {
+            Serial.println("");
+            Serial.println("RESETING TX");
+            Serial.println(CAN0.getError());
+            CAN0.mcp2515_setRegister(0x1C, 0x0);
+            Serial.println(CAN0.getError());
+            Serial.println("RESETING TX");
+            Serial.println("");
+        }
+        */
+        CANBusDebugTimer = millis();
+    }
+#endif
+}
+
 
 // Main loop
 void loop()
 {
-    // Read incoming messages given highest priority
-    MSGBuff();
+    // Debug MCP2515 CAN Bus hardware
+    void CANBus_Debug();
 
     // Check if there are any CAN Bus messages in the buffer
     readMSG();
 
-    // Read incoming messages given highest priority
-    MSGBuff();
-
     // Send out the current actuator angles
     updateAxisPos();
-    
-    // Read incoming messages given highest priority
-    MSGBuff();
 
     // Execute current commands
     run();
+
+    // Save current axis postions
+    saveAxisPositions();
 }
 
 

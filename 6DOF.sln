@@ -7,9 +7,13 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "6DOF", "6DOF\6DOF.vcxproj",
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MCP_CAN_lib-master-0.0.0", "6DOF\Libraries\MCP_CAN_lib-master\0.0.0\MCP_CAN_lib-master\MCP_CAN_lib-master-0.0.0.vcxitems", "{25482957-4408-4208-8C7C-6D6181E40970}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EEPROM-2.0", "6DOF\Libraries\EEPROM\2.0\EEPROM\EEPROM-2.0.vcxitems", "{0D98567D-1951-4263-B9C1-71D93746F7D2}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		6DOF\Libraries\EEPROM\2.0\EEPROM\EEPROM-2.0.vcxitems*{0d98567d-1951-4263-b9c1-71d93746f7d2}*SharedItemsImports = 9
 		6DOF\Libraries\MCP_CAN_lib-master\0.0.0\MCP_CAN_lib-master\MCP_CAN_lib-master-0.0.0.vcxitems*{25482957-4408-4208-8c7c-6d6181e40970}*SharedItemsImports = 9
+		6DOF\Libraries\EEPROM\2.0\EEPROM\EEPROM-2.0.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
 		6DOF\Libraries\MCP_CAN_lib-master\0.0.0\MCP_CAN_lib-master\MCP_CAN_lib-master-0.0.0.vcxitems*{c5f80730-f44f-4478-bdae-6634efc2ca88}*SharedItemsImports = 4
 	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

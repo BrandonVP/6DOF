@@ -50,18 +50,20 @@ class MCP_CAN
 
     void mcp2515_reset(void);                                           // Soft Reset MCP2515
 
-    INT8U mcp2515_readRegister(const INT8U address);                    // Read MCP2515 register
+ 
     
     void mcp2515_readRegisterS(const INT8U address,                     // Read MCP2515 successive registers
 	                             INT8U values[], 
                                const INT8U n);
    
-    void mcp2515_setRegister(const INT8U address,                       // Set MCP2515 register
-                             const INT8U value);
+
+    /* MOVED TO PUBLIC*/
+
 
     void mcp2515_setRegisterS(const INT8U address,                      // Set MCP2515 successive registers
-                              const INT8U values[],
-                              const INT8U n);
+        const INT8U values[],
+        const INT8U n);
+
     
     void mcp2515_initCANBuffers(void);
     
@@ -104,6 +106,15 @@ class MCP_CAN
     INT8U sendMsg();                                                    // Send message
 
 public:
+
+    bool mcp2515_tx_flag_status(void);
+    void mcp2515_set_tx_flag_status(void);
+    bool sendFlag = true;
+    /* MOVED FROM PRIVATE*/
+    void mcp2515_setRegister(const INT8U address,                       // Set MCP2515 register
+        const INT8U value);
+    INT8U mcp2515_readRegister(const INT8U address);                    // Read MCP2515 register
+
     MCP_CAN(INT8U _CS);
     INT8U begin(INT8U idmodeset, INT8U speedset, INT8U clockset);       // Initialize controller parameters
     INT8U init_Mask(INT8U num, INT8U ext, INT32U ulData);               // Initialize Mask(s)

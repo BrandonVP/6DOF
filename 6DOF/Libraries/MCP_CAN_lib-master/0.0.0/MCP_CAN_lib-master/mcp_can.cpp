@@ -698,7 +698,25 @@ void MCP_CAN::mcp2515_write_canMsg( const INT8U buffer_sidh_addr)
 
     mcp2515_setRegister((mcp_addr+4), m_nDlc );                         /* write the RTR and DLC        */
     mcp2515_write_id(mcp_addr, m_nExtFlg, m_nID );                      /* write CAN id                 */
+    sendFlag = true;
+}
 
+/*********************************************************************************************************
+** Function name:           mcp2515_tx_flag_status
+** Descriptions:            Returns tx flag status
+*********************************************************************************************************/
+bool MCP_CAN::mcp2515_tx_flag_status(void)
+{
+    return sendFlag;
+}
+
+/*********************************************************************************************************
+** Function name:           mcp2515_tx_flag_status
+** Descriptions:            Returns tx flag status
+*********************************************************************************************************/
+void MCP_CAN::mcp2515_set_tx_flag_status(void)
+{
+    sendFlag = false;
 }
 
 /*********************************************************************************************************
