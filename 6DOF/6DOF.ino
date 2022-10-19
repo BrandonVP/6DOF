@@ -41,7 +41,7 @@ Design way for arm movements of different lengths to end together
 //#include <LinkedListLib.h>
 
 #define BUFFER_SIZE 20
-#define REFRESH_RATE 200
+#define REFRESH_RATE 100
 #define ANGLE_ACCELERATION 400
 
 #define axis1StartingAngle 0xB4
@@ -67,12 +67,20 @@ MCP_CAN CAN0(49);
 
 // Actuator objects - (min angle, max angle, current angle)
 
+/*
 Actuator axis1(40, 320, axis1StartingAngle);
 Actuator axis2(60, 300, axis2StartingAngle);
 Actuator axis3(45, 135, axis3StartingAngle);
 Actuator axis4(160, 200, axis4StartingAngle);
 Actuator axis5(160, 200, axis5StartingAngle);
 Actuator axis6(160, 200, axis6StartingAngle);
+*/
+Actuator axis1(0, 360, axis1StartingAngle);
+Actuator axis2(0, 360, axis2StartingAngle);
+Actuator axis3(0, 360, axis3StartingAngle);
+Actuator axis4(0, 360, axis4StartingAngle);
+Actuator axis5(0, 360, axis5StartingAngle);
+Actuator axis6(0, 360, axis6StartingAngle);
 
 
 bool hasAcceleration = true;
@@ -80,7 +88,7 @@ bool runSetup = false;
 bool runProg = false;
 bool delayState = true;
 bool isGripOpen = true;
-bool eStopActivated = false;
+volatile bool eStopActivated = false;
 
 // Run() vars
 uint16_t count = 0;
@@ -116,6 +124,7 @@ int freeRam() {
 // Incoming CAN Bus frame pushed to buffer
 void MSGBuff()
 {
+
      // Read incoming message
     CAN0.readMsgBuf(&rxId, &len, rxBuf);
     //if (!CAN0.readMsgBuf(&rxId, &len, rxBuf))
@@ -506,6 +515,7 @@ void run()
         count = 0;
     }
 
+    // TODO: non blocking
     delayMicroseconds(PULSE_SPEED_2 + acceleration);
     if (runIndex < maxStep && delayState == true )
     {
@@ -621,24 +631,55 @@ bool swap = false;
 // Update pos on a timer
 void updateAxisPos()
 {
-    if (CAN0.mcp2515_tx_flag_status() && millis() - timer > REFRESH_RATE)
+    if (CAN0.mcp2515_tx_flag_status() == true && millis() - timer > REFRESH_RATE)
+    {
+        uint8_t data[8];
+        uint16_t a1 = axis1.get_current_angle();
+        uint16_t a2 = axis2.get_current_angle();
+        uint16_t a3 = axis3.get_current_angle();
+        uint16_t a4 = axis4.get_current_angle();
+        uint16_t a5 = axis5.get_current_angle();
+        uint16_t a6 = axis6.get_current_angle();
+        uint8_t grip = 0;
+        uint8_t crc = (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1;
+
+        data[7] = (a1 & 0xFF);
+        data[6] = (a1 >> 8);
+        data[6] |= ((a2 & 0xFF) << 1);
+        data[5] = (a2 >> 7);
+        data[5] |= ((a3 & 0x7F) << 2);
+        data[4] = (a3 >> 6);
+        data[4] |= ((a4 & 0x3F) << 3);
+        data[3] = (a4 >> 5);
+        data[3] |= ((a5 & 0x1F) << 4);
+        data[2] = (a5 >> 4);
+        data[2] |= ((a6 & 0xF) << 5);
+        data[1] = (a6 >> 3);
+        data[1] |= ((grip & 0x7) << 6);
+        data[0] = (grip >> 2);
+        data[0] |= (crc << 3);
+
+        CAN0.sendMsgBuf(POSITION_ID, 0, 8, data);
+        timer = millis();
+    }
+    /*
+    if (CAN0.mcp2515_tx_flag_status() == true && millis() - timer > REFRESH_RATE)
     {
         if (swap)
         {
+            CAN0.mcp2515_set_tx_flag_status();
             sendLowerPos();
             swap = !swap;
-            CAN0.mcp2515_set_tx_flag_status();
         }
         else
         {
+            CAN0.mcp2515_set_tx_flag_status();
             sendUpperPos();
             swap = !swap;
-            CAN0.mcp2515_set_tx_flag_status();
         }
-        
-        
         timer = millis();
     }
+    */
 }
 
 // Send Lower Axis Positions
@@ -723,6 +764,7 @@ void sendUpperPos()
 }
 
 // Save axis posistions to EMMC chip
+// Save after completed move?
 void saveAxisPositions()
 {
     /*
@@ -825,6 +867,7 @@ void setup()
     // The interrupt makes movements very choppy
     attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 
+    CAN0.sendFlag = true;
     // Enable interrupts
     sei();
 
@@ -919,7 +962,7 @@ void CANBus_Debug()
 void loop()
 {
     // Debug MCP2515 CAN Bus hardware
-    void CANBus_Debug();
+    CANBus_Debug();
 
     // Check if there are any CAN Bus messages in the buffer
     readMSG();
