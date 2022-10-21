@@ -9,36 +9,38 @@
 ===========================================================
 Document
 - Better comments and improved naming convention
+- Error / Range checking
+- Acceleration set by controller
 
-Design way for arm movements of different lengths to end together
+- Design way for arm movements of different lengths to end together
 
 ===========================================================
     End Todo List
 =========================================================*/
 
+
+
 // Uncomment an arm for upload
+#define ARM1
+//#define ARM2
+
+// Debug CAN Bus Connection
+//#define DEBUG_CANBUS
+
 #include <EEPROM.h>
-//#define ARM1
-#define ARM2
-
-// CAN Bus debug
-#define DEBUG_CANBUS
-
 #include "Actuator.h"
 #include <mcp_can_dfs.h>
 #include <mcp_can.h>
 #include "pinAssignments.h"
 #include <SPI.h>
 #include "can_buffer.h"
+
 #if defined ARM1
     #include "ch1.h"
 #endif
 #if defined ARM2
     #include "ch2.h"
 #endif
-
-//#include "CANBuffer.h"
-//#include <LinkedListLib.h>
 
 #define BUFFER_SIZE 20
 #define REFRESH_RATE 100
@@ -52,8 +54,8 @@ Design way for arm movements of different lengths to end together
 #define axis6StartingAngle 0xB4
 
 // Balance stepper on / off state
-constexpr auto PULSE_SPEED_1 = 140;                           
-constexpr auto PULSE_SPEED_2 = 10;                          
+#define PULSE_SPEED_1 = 140;                           
+#define PULSE_SPEED_2 = 10;                          
 
 // CAN Bus vars
 volatile long unsigned int rxId;
@@ -61,9 +63,6 @@ volatile byte len = 0;
 volatile byte rxBuf[8];
 
 MCP_CAN CAN0(49);
-
-// Linked list of nodes for a program
-//LinkedList<CANBuffer*> buffer;
 
 // Actuator objects - (min angle, max angle, current angle)
 
@@ -82,7 +81,6 @@ Actuator axis4(0, 360, axis4StartingAngle);
 Actuator axis5(0, 360, axis5StartingAngle);
 Actuator axis6(0, 360, axis6StartingAngle);
 
-
 bool hasAcceleration = true;
 bool runSetup = false;
 bool runProg = false;
@@ -92,7 +90,7 @@ volatile bool eStopActivated = false;
 
 // Run() vars
 uint16_t count = 0;
-uint16_t acceleration = 0;
+uint16_t acceleration = 0;  
 uint32_t maxStep = 0;
 volatile uint32_t runIndex = 0;
 
@@ -124,54 +122,37 @@ int freeRam() {
 // Incoming CAN Bus frame pushed to buffer
 void MSGBuff()
 {
-
      // Read incoming message
     CAN0.readMsgBuf(&rxId, &len, rxBuf);
-    //if (!CAN0.readMsgBuf(&rxId, &len, rxBuf))
-    //{
-        // Update axis angle backup timer
-        //updateEEPROM = millis();
-        //isPositionSaved = false;
 
+    // TODO: eStop message should use CONTROL_RXID then define estop code
+    /*
     // Estop check
-        if (rxBuf[1] == 0x04)
+    if (rxBuf[1] == 0x04)
+    {
+        if (rxBuf[2] == 0x02)
         {
-            if (rxBuf[2] == 0x02)
-            {
-                eStopActivated = true;
-            }
-            else if (rxBuf[2] == 0x01)
-            {
-                eStopActivated = false;
-            }
+            eStopActivated = true;
         }
+        else if (rxBuf[2] == 0x01)
+        {
+            eStopActivated = false;
+        }
+    }
+    */
 
-        /* This should not be done in ISR, use flag instead
-        if ((rxId == 0xA0 || rxId == 0xB0) && (rxBuf[1] == 0x1 || rxBuf[1] == 0x02))
-        {
-            sendLowerPos();
-            sendUpperPos();
-            return;
-        }
-        */
-
-        // Push message to stack
-        incoming.id = rxId;
-        for (uint8_t i = 0; i < 8; i++)
-        {
-            incoming.data[i] = rxBuf[i];
-        }
-        myStack.push(incoming);
-    //}
+    // Push message to stack
+    incoming.id = rxId;
+    memcpy((void*)incoming.data, (const void*)rxBuf, 8);
+    myStack.push(incoming);
 }
 
-// Read messages from buffer
+// Read and execute messages from buffer
 void readMSG()
 {
     if (runProg == false && myStack.stack_size() > 0)
     {
         myStack.pop(&buffer);
-        // Send the message to the controller for processing
         controller(buffer);
     }
 }
@@ -182,6 +163,7 @@ void controller(CAN_Frame buffer)
 {
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
 #if defined DEBUG_CONTROLLER
     Serial.print("ID: ");
     Serial.print(buffer.id, 16);
@@ -207,28 +189,37 @@ void controller(CAN_Frame buffer)
     switch (buffer.id)
     {
     case RXID_CONTROL:
-        /*=========================================================
-                    Send Current Lower Axis Positions
-        ===========================================================*/
-        if (buffer.data[1] == 0x01)
+        // RX Command List
+        #define CRC_BYTE                0x00
+        #define COMMAND_BYTE            0x01
+
+        #define SEND_AXIS_POSITIONS     0x01
+        #define RESET_AXIS_POSITION     0x02
+        #define SET_LOWER_AXIS_POSITION 0x03
+        #define SET_UPPER_AXIS_POSITION 0x04
+        #define MOVE_GRIP               0x0A
+        #define SET_WAIT_TIMER          0x0B
+        #define EXECUTE_PROGRAM         0x0C
+        
+        /*
+        if (!crcCheck)
         {
-            sendLowerPos();
             break;
         }
-
+        */
+        
         /*=========================================================
-                    Send Current Higher Axis Positions
+                    Send Current Axis Positions
         ===========================================================*/
-        if (buffer.data[1] == 0x02)
+        if (buffer.data[COMMAND_BYTE] == SEND_AXIS_POSITIONS)
         {
-            sendUpperPos();
+            updateAxisPos();
             break;
         }
-
         /*=========================================================
                     Set Axis Angles to Current Postion
         ===========================================================*/
-        if (buffer.data[1] == 0x03)
+        if (buffer.data[COMMAND_BYTE] == RESET_AXIS_POSITION)
         {
             axis1.set_current_angle(0xB4);
             axis2.set_current_angle(0xB4);
@@ -237,74 +228,104 @@ void controller(CAN_Frame buffer)
             axis5.set_current_angle(0xB4);
             axis6.set_current_angle(0xB4);
         }
-
+        /*=========================================================
+               Set next angles for bottom three axis
+        ===========================================================*/
+        if (buffer.data[COMMAND_BYTE] == SET_LOWER_AXIS_POSITION)
+        {
+            if ((buffer.data[2] + buffer.data[3]) > 0) {
+                axis1.set_actuator(buffer.data[2] + buffer.data[3]);
+            }
+            if ((buffer.data[4] + buffer.data[5]) > 0) {
+                axis2.set_actuator(buffer.data[4] + buffer.data[5]);
+            }
+            if ((buffer.data[6] + buffer.data[7]) > 0) {
+                axis3.set_actuator(buffer.data[6] + buffer.data[7]);
+            }
+        }
+        /*=========================================================
+               Set next angles for top three axis
+        ===========================================================*/
+        if (buffer.data[COMMAND_BYTE] == SET_UPPER_AXIS_POSITION)
+        {
+            if ((buffer.data[2] + buffer.data[3]) > 0) {
+                axis4.set_actuator(buffer.data[2] + buffer.data[3]);
+            }
+            if ((buffer.data[4] + buffer.data[5]) > 0) {
+                axis5.set_actuator(buffer.data[4] + buffer.data[5]);
+            }
+            if ((buffer.data[6] + buffer.data[7]) > 0) {
+                axis6.set_actuator(buffer.data[6] + buffer.data[7]);
+            }
+        }
         /*=========================================================
                     Set Wait Timer
         ===========================================================*/
-        if (buffer.data[1] == 0x0A)
+        if (buffer.data[COMMAND_BYTE] == SET_WAIT_TIMER)
         {
             uint8_t seconds = buffer.data[7];
             uint8_t minutes = buffer.data[6];
-
         }
-
-
         /*=========================================================
                     Open/Close Grip
         ===========================================================*/
-        if (buffer.data[6] == 0x01)
+        if (buffer.data[COMMAND_BYTE] == MOVE_GRIP)
         {
-            open_grip();
+            if (buffer.data[6] == 0x01)
+            {
+                open_grip();
+            }
+            if (buffer.data[7] == 0x01)
+            {
+                close_grip();
+            }
         }
-        if (buffer.data[7] == 0x01)
-        {
-            close_grip();
-        }
-
         /*=========================================================
-                    Executes Move
+                    Executes Program
         ===========================================================*/
-        if (buffer.data[0] == 0x01)
+        if (buffer.data[COMMAND_BYTE] == EXECUTE_PROGRAM)
         {
             returnData[1] = 0x03;
-            CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
+            CAN0.sendMsgBuf(TXID_CONTROLLER, 0, 8, returnData);
             runProg = true;
             runSetup = true;
             acceleration = ANGLE_ACCELERATION;
             hasAcceleration = true;
         }
         break;
-    case RXID_LOWER:
+    case RXID_PROGRAM:
         /*=========================================================
-               Set next angles for bottom three axis
+                            Program Next Move
         ===========================================================*/
-        if ((buffer.data[2] + buffer.data[3]) > 0) {
-            axis1.set_actuator(buffer.data[2] + buffer.data[3]);
-        }
-        if ((buffer.data[4] + buffer.data[5]) > 0) {
-            axis2.set_actuator(buffer.data[4] + buffer.data[5]);
-        }
-        if ((buffer.data[6] + buffer.data[7]) > 0) {
-            axis3.set_actuator(buffer.data[6] + buffer.data[7]);
+        // Need these temp values to calculate "CRC"
+        uint8_t crc, grip;
+        uint16_t a1, a2, a3, a4, a5, a6;
+
+        //|                          data                              |
+        //|  0  |  1   |   2   |   3   |   4   |   5   |   6   |   7   |
+        //| 0-7 | 8-15 | 16-23 | 24-31 | 32-39 | 40-47 | 48-55 | 56-63 |
+
+        //|  crc  |  grip |   a6   |   a5   |   a4   |   a3   |   a2   |   a1   |
+        //|  0-4  |  5-9  |  10-18 |  19-27 |  28-36 |  37-45 |  46-54 |  55-63 |
+        a1 = ((buffer.data[6] & 0x01) << 8)   | buffer.data[7];
+        a2 = (((buffer.data[5] & 0x03)) << 7) | (buffer.data[6] >> 1);
+        a3 = (((buffer.data[4] & 0x07)) << 6) | (buffer.data[5] >> 2);
+        a4 = (((buffer.data[3] & 0x0F)) << 5) | (buffer.data[4] >> 3);
+        a5 = (((buffer.data[2] & 0x1F)) << 4) | (buffer.data[3] >> 4);
+        a6 = (((buffer.data[1] & 0x3F)) << 3) | (buffer.data[2] >> 5);
+        grip = ((buffer.data[0] & 0x7) << 2)  | (buffer.data[1] >> 6);
+        crc = ((buffer.data[0]) >> 3);
+        if (crc == (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1)
+        {
+            axis1.set_actuator(a1);
+            axis1.set_actuator(a2);
+            axis1.set_actuator(a3);
+            axis1.set_actuator(a4);
+            axis1.set_actuator(a5);
+            axis1.set_actuator(a6);
         }
         break;
-
-    case RXID_UPPER:
-        /*=========================================================
-               Set next angles for top three axis
-        ===========================================================*/
-        if ((buffer.data[2] + buffer.data[3]) > 0) {
-            axis4.set_actuator(buffer.data[2] + buffer.data[3]);
-        }
-        if ((buffer.data[4] + buffer.data[5]) > 0) {
-            axis5.set_actuator(buffer.data[4] + buffer.data[5]);
-        }
-        if ((buffer.data[6] + buffer.data[7]) > 0) {
-            axis6.set_actuator(buffer.data[6] + buffer.data[7]);
-        }
-        break;
-
-    case RX_MANUAL:
+    case RXID_MANUAL:
         /*=========================================================
                Manual Control
         ===========================================================*/
@@ -631,6 +652,7 @@ bool swap = false;
 // Update pos on a timer
 void updateAxisPos()
 {
+    // Pack data into a single frame using all bits
     if (CAN0.mcp2515_tx_flag_status() == true && millis() - timer > REFRESH_RATE)
     {
         uint8_t data[8];
@@ -640,6 +662,7 @@ void updateAxisPos()
         uint16_t a4 = axis4.get_current_angle();
         uint16_t a5 = axis5.get_current_angle();
         uint16_t a6 = axis6.get_current_angle();
+        // TODO: Add grip value after the grip function is updated
         uint8_t grip = 0;
         uint8_t crc = (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1;
 
@@ -659,111 +682,12 @@ void updateAxisPos()
         data[0] = (grip >> 2);
         data[0] |= (crc << 3);
 
-        CAN0.sendMsgBuf(POSITION_ID, 0, 8, data);
+        CAN0.sendMsgBuf(TXID_POSITION, 0, 8, data);
         timer = millis();
     }
-    /*
-    if (CAN0.mcp2515_tx_flag_status() == true && millis() - timer > REFRESH_RATE)
-    {
-        if (swap)
-        {
-            CAN0.mcp2515_set_tx_flag_status();
-            sendLowerPos();
-            swap = !swap;
-        }
-        else
-        {
-            CAN0.mcp2515_set_tx_flag_status();
-            sendUpperPos();
-            swap = !swap;
-        }
-        timer = millis();
-    }
-    */
 }
 
-// Send Lower Axis Positions
-void sendLowerPos()
-{
-    byte returnData[8] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-
-    // Get and set angles in returnData
-    uint16_t temp = axis1.get_current_angle();
-    if (temp > 255)
-    {
-        returnData[2] = 0x01;
-        returnData[3] = temp - 256;
-    }
-    else
-    {
-        returnData[3] = temp;
-    }
-    temp = axis2.get_current_angle();
-    if (temp > 255)
-    {
-        returnData[4] = 0x01;
-        returnData[5] = temp - 256;
-    }
-    else
-    {
-        returnData[5] = temp;
-    }
-    temp = axis3.get_current_angle();
-    if (temp > 255)
-    {
-        returnData[6] = 0x01;
-        returnData[7] = temp - 256;
-    }
-    else
-    {
-        returnData[7] = temp;
-    }
-
-    // Return axis positions for bottom three axis
-    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-}
-
-// Send Upper Axis Positions
-void sendUpperPos()
-{
-    byte returnData[8] = { 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    uint8_t temp;
-
-    temp = axis4.get_current_angle();
-    if (temp > 255)
-    {
-        returnData[2] = 0x01;
-        returnData[3] = temp - 256;
-    }
-    else
-    {
-        returnData[3] = temp;
-    }
-    temp = axis5.get_current_angle();
-    if (temp > 255)
-    {
-        returnData[4] = 0x01;
-        returnData[5] = temp - 256;
-    }
-    else
-    {
-        returnData[5] = temp;
-    }
-    temp = axis6.get_current_angle();
-    if (temp > 255)
-    {
-        returnData[6] = 0x01;
-        returnData[7] = temp - 256;
-    }
-    else
-    {
-        returnData[7] = temp;
-    }
-    // Return axis positions for top three axis
-    CAN0.sendMsgBuf(RXID_SEND, 0, 8, returnData);
-}
-
-// Save axis posistions to EMMC chip
+// Save axis posistions to the EEPROM
 // Save after completed move?
 void saveAxisPositions()
 {
@@ -812,25 +736,25 @@ void setup()
 
 #if defined ARM1
     // Arm1
-    CAN0.init_Mask(0, 0, 0x00FF0000);                // Init first mask...
-    CAN0.init_Filt(0, 0, 0x00A00000);                // Init first filter...
-    CAN0.init_Filt(1, 0, 0x00A10000);                // Init second filter...
-    CAN0.init_Mask(1, 0, 0x00FF0000);                // Init second mask... 
-    CAN0.init_Filt(2, 0, 0x00A20000);                // Init third filter...
-    CAN0.init_Filt(3, 0, 0x00A30000);                // Init fouth filter...
-    CAN0.init_Filt(4, 0, 0x00A40000);                // Init fifth filter...
-    CAN0.init_Filt(5, 0, 0x00A50000);                // Init sixth filter...
+    CAN0.init_Mask(0, 0, 0x0FF00000);                // Init first mask...
+    CAN0.init_Filt(0, 0, 0x01A00000);                // Init first filter...
+    CAN0.init_Filt(1, 0, 0x01A00000);                // Init second filter...
+    CAN0.init_Mask(1, 0, 0x0FF00000);                // Init second mask... 
+    CAN0.init_Filt(2, 0, 0x01A00000);                // Init third filter...
+    CAN0.init_Filt(3, 0, 0x01A00000);                // Init fouth filter...
+    CAN0.init_Filt(4, 0, 0x01A00000);                // Init fifth filter...
+    CAN0.init_Filt(5, 0, 0x01A00000);                // Init sixth filter...
 #endif 
 #if defined ARM2
     // Arm2
-    CAN0.init_Mask(0, 0, 0x00BF0000);                // Init first mask...
-    CAN0.init_Filt(0, 0, 0x00B00000);                // Init first filter...
-    CAN0.init_Filt(1, 0, 0x00B10000);                // Init second filter...
-    CAN0.init_Mask(1, 0, 0x00BF0000);                // Init second mask...
-    CAN0.init_Filt(2, 0, 0x00B20000);                // Init third filter...
-    CAN0.init_Filt(3, 0, 0x00B30000);                // Init fouth filter...
-    CAN0.init_Filt(4, 0, 0x00B40000);                // Init fifth filter...
-    CAN0.init_Filt(5, 0, 0x00B50000);                // Init sixth filter...
+    CAN0.init_Mask(0, 0, 0x0FF00000);                // Init first mask...
+    CAN0.init_Filt(0, 0, 0x02A00000);                // Init first filter...
+    CAN0.init_Filt(1, 0, 0x02A00000);                // Init second filter...
+    CAN0.init_Mask(1, 0, 0x0FF00000);                // Init second mask...
+    CAN0.init_Filt(2, 0, 0x02A00000);                // Init third filter...
+    CAN0.init_Filt(3, 0, 0x02A00000);                // Init fouth filter...
+    CAN0.init_Filt(4, 0, 0x02A00000);                // Init fifth filter...
+    CAN0.init_Filt(5, 0, 0x02A00000);                // Init sixth filter...
 #endif
 
     CAN0.setMode(MCP_NORMAL);  // Change to normal mode to allow messages to be transmitted
@@ -901,7 +825,7 @@ void CANBus_Debug()
     const uint8_t TEC_error_register = 0x1C;
     const uint8_t REC_error_register = 0x1D;
     const uint8_t error_register = 0x1D;
-    const uint16_t read_register_interval = 2000;
+    const uint16_t read_register_interval = 4000;
 
     if (millis() - CANBusDebugTimer > read_register_interval)
     {
@@ -916,6 +840,7 @@ void CANBus_Debug()
         Serial.print("REC: ");
         uint16_t result3 = CAN0.mcp2515_readRegister(REC_error_register);
         Serial.println(result3);
+        Serial.println("");
 
         //Serial.print("Memory: ");
         //Serial.println(freeRam());

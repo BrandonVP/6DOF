@@ -1,12 +1,6 @@
 #pragma once
-#define RXID_SEND    0x0C1
-#define RXID_CONTROL 0x0A0
-#define RXID_LOWER   0x0A1
-#define RXID_UPPER   0x0A2
-#define RX_MANUAL    0x0A3
-
-#define CONTROLLER_ID 0x1C3
-#define POSITION_ID   0x1A0
-#define PROGRAM_RXID  0x1A1
-#define MANUAL_RXID   0x1A2
-#define CONTROL_RXID  0x1A3
+#define TXID_CONTROLLER 0x1C3 // Direct communicate with controller
+#define TXID_POSITION   0x1A0 // Current axis position broadcast ID
+#define RXID_PROGRAM    0x1A1 // Programmed movements ID
+#define RXID_MANUAL     0x1A2 // Manual movements ID
+#define RXID_CONTROL    0x1A3 // Control commands
