@@ -21,11 +21,11 @@ Document
 
 
 // Uncomment an arm for upload
-#define ARM1
-//#define ARM2
+//#define ARM1
+#define ARM2
 
 // Debug CAN Bus Connection
-//#define DEBUG_CANBUS
+#define DEBUG_CANBUS
 
 #include <EEPROM.h>
 #include "Actuator.h"
@@ -54,8 +54,8 @@ Document
 #define axis6StartingAngle 0xB4
 
 // Balance stepper on / off state
-#define PULSE_SPEED_1 = 140;                           
-#define PULSE_SPEED_2 = 10;                          
+#define PULSE_SPEED_1 140                         
+#define PULSE_SPEED_2 10                         
 
 // CAN Bus vars
 volatile long unsigned int rxId;
@@ -141,6 +141,8 @@ void MSGBuff()
     }
     */
 
+    //Serial.print("ID: ");
+    //Serial.println(rxId);
     // Push message to stack
     incoming.id = rxId;
     memcpy((void*)incoming.data, (const void*)rxBuf, 8);
@@ -818,6 +820,7 @@ void setup()
 
 #if defined DEBUG_CANBUS
 uint32_t CANBusDebugTimer = 0;
+uint32_t count1 = 0;
 #endif
 void CANBus_Debug()
 {
@@ -825,10 +828,11 @@ void CANBus_Debug()
     const uint8_t TEC_error_register = 0x1C;
     const uint8_t REC_error_register = 0x1D;
     const uint8_t error_register = 0x1D;
-    const uint16_t read_register_interval = 4000;
+    const uint16_t read_register_interval = 2000;
 
     if (millis() - CANBusDebugTimer > read_register_interval)
     {
+        Serial.println(count1++);
         Serial.print("getError: ");
         uint16_t result1 = CAN0.mcp2515_readRegister(error_register);
         Serial.println(result1);
@@ -842,8 +846,14 @@ void CANBus_Debug()
         Serial.println(result3);
         Serial.println("");
 
-        //Serial.print("Memory: ");
-        //Serial.println(freeRam());
+        Serial.print("Memory: ");
+        Serial.println(freeRam());
+
+        Serial.print("Stack Size: ");
+        Serial.println(myStack.stack_size());
+
+        Serial.print("CAN Bus Pin: ");
+        Serial.println(CAN0.readMsgBuf(&rxId, &len, rxBuf));
         /*
         if (result1)
         {

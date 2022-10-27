@@ -18,7 +18,7 @@
 #include "WProgram.h"
 #endif
 
-#define BUFFER_SIZE 32
+#define BUFFER_SIZE 0x1F
 
 struct CAN_Frame
 {
@@ -33,7 +33,7 @@ private:
 	uint8_t bufferInPtr = 0;
 	struct CAN_Frame rxBuffer[BUFFER_SIZE];
 public:
-	bool push(struct CAN_Frame);
+	void push(struct CAN_Frame);
 	void pop(struct CAN_Frame* bufOut);
 	void peek(struct CAN_Frame*);
 	void clear_buffer(void);

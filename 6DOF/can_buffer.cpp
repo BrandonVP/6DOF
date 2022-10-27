@@ -10,22 +10,19 @@
 
 //#define DEBUG_PUSH
 // Copies provided structure into the buffer
-bool can_buffer::push(struct CAN_Frame addFrame)
+void can_buffer::push(struct CAN_Frame addFrame)
 {
 	// Copy message
 	rxBuffer[bufferInPtr].id = addFrame.id;
-	for (uint8_t i = 0; i < 8; i++)
-	{
-		rxBuffer[bufferInPtr].data[i] = addFrame.data[i];
-	}
+	memcpy((void*)rxBuffer[bufferInPtr].data, (const void*)addFrame.data, 8);
 
 	// Increment bufferInPtr
-	(bufferInPtr < (BUFFER_SIZE - 1)) ? bufferInPtr++ : bufferInPtr = 0;
+	bufferInPtr = ((bufferInPtr + 1) & BUFFER_SIZE);
 
 	// Overflow case
 	if (bufferInPtr == bufferOutPtr)
 	{
-		(bufferOutPtr < (BUFFER_SIZE - 1)) ? bufferOutPtr++ : bufferOutPtr = 0;
+		bufferOutPtr = ((bufferOutPtr + 1) & BUFFER_SIZE);
 	}
 
 #if defined DEBUG_PUSH
@@ -35,8 +32,6 @@ bool can_buffer::push(struct CAN_Frame addFrame)
 	Serial.print("New OutPtr Position: ");
 	Serial.println(bufferOutPtr);
 #endif
-
-	return true;
 }
 
 //#define DEBUG_POP
@@ -45,13 +40,8 @@ void can_buffer::pop(struct CAN_Frame* bufOut)
 {
 	// Copy message
 	bufOut->id = rxBuffer[bufferOutPtr].id;
-	for (uint8_t i = 0; i < 8; i++)
-	{
-		bufOut->data[i] = rxBuffer[bufferOutPtr].data[i];
-	}
-
-	(bufferOutPtr < BUFFER_SIZE - 1) ? bufferOutPtr++ : bufferOutPtr = 0;
-
+	memcpy((void*)bufOut->data, (const void*)rxBuffer[bufferOutPtr].data, 8);
+	bufferOutPtr = ((bufferOutPtr + 1) & BUFFER_SIZE);
 #if defined DEBUG_PUSH
 	Serial.println("pop");
 	Serial.print("New OutPtr Position: ");
@@ -62,7 +52,7 @@ void can_buffer::pop(struct CAN_Frame* bufOut)
 // Calculates current structures in buffer by subtracting points then anding with max buffer size value
 uint8_t can_buffer::stack_size(void)
 {
-	uint8_t size = (bufferInPtr - bufferOutPtr) & (BUFFER_SIZE - 1);
+	uint8_t size = (bufferInPtr - bufferOutPtr) & BUFFER_SIZE;
 	return size;
 }
 
@@ -70,10 +60,7 @@ uint8_t can_buffer::stack_size(void)
 void can_buffer::peek(struct CAN_Frame* peek)
 {
 	peek->id = rxBuffer[bufferOutPtr].id;
-	for (uint8_t i = 0; i < 8; i++)
-	{
-		peek->data[i] = rxBuffer[bufferInPtr].data[i];
-	}
+	memcpy((void*)peek->data, (const void*)rxBuffer[bufferInPtr].data, 8);
 }
 
 // Reset both points back to zero
