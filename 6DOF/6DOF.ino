@@ -25,7 +25,7 @@ Document
 #define ARM2
 
 // Debug CAN Bus Connection
-#define DEBUG_CANBUS
+//#define DEBUG_CANBUS
 
 #include <EEPROM.h>
 #include "Actuator.h"
@@ -141,8 +141,6 @@ void MSGBuff()
     }
     */
 
-    //Serial.print("ID: ");
-    //Serial.println(rxId);
     // Push message to stack
     incoming.id = rxId;
     memcpy((void*)incoming.data, (const void*)rxBuf, 8);
@@ -912,146 +910,3 @@ void loop()
     saveAxisPositions();
 }
 
-
-/*=========================================================
-    Depreciated Code 
-===========================================================*/
-/*
-void setupMove()
-{
-    uint32_t temp = findLargest();
-    Serial.print("Largest: ");
-    Serial.println(temp);
-    if (axis1.get_steps_to_move() > 0)
-    {
-        delay1 = (temp / axis1.get_steps_to_move());
-    }
-    else
-    {
-        delay1 = 0;
-    }
-
-    if (axis2.get_steps_to_move() > 0)
-    {
-        delay2 = (temp / axis2.get_steps_to_move());
-    }
-    else
-    {
-        delay2 = 0;
-    }
-
-    if (axis3.get_steps_to_move() > 0)
-    {
-        //delay3 = (temp / axis3.get_steps_to_move());
-    }
-    else
-    {
-        //delay3 = 0;
-    }
-
-    if (axis4.get_steps_to_move() > 0)
-    {
-        //delay4 = (temp / axis4.get_steps_to_move());
-    }
-    else
-    {
-        //delay4 = 0;
-    }
-
-    if (axis5.get_steps_to_move() > 0)
-    {
-        //delay5 = (temp / axis5.get_steps_to_move());
-    }
-    else
-    {
-        //delay5 = 0;
-    }
-
-    if (axis6.get_steps_to_move() > 0)
-    {
-        //delay6 = (temp / axis6.get_steps_to_move());
-    }
-    else
-    {
-        //delay6 = 0;
-    }
-
-
-    axis1.move();
-    axis2.move();
-    axis3.move();
-    axis4.move();
-    axis5.move();
-    axis6.move();
-
-    digitalWrite(DIR_x1, axis1.get_actuator_direction());
-    digitalWrite(DIR_y1, axis2.get_actuator_direction());
-    digitalWrite(DIR_z1, axis3.get_actuator_direction());
-    digitalWrite(DIR_x2, axis4.get_actuator_direction());
-    digitalWrite(DIR_y2, axis5.get_actuator_direction());
-    digitalWrite(DIR_z2, axis6.get_actuator_direction());
-
-    runProg = true;
-}
-
-
-void moveAxis1()
-{
-    if (runProg == false)
-    {
-        return;
-    }
-    if (axis1.get_steps_to_move() > 0)
-    {
-        digitalWrite(DIR_y1, axis1.get_actuator_direction());
-
-        if (millis() - timer1 > PULSE_SPEED + 40 && a1On == false)
-        {
-            a1On = true;
-            axis1.reduceSteps();
-            // pulse high
-            digitalWrite(SPD_x1, true);
-            timer1 = millis();
-        }
-        if (millis() - timer1 > SPEED_ADJUSTED_G1 && a1On == true)
-        {
-            a1On = false;
-            // pulse low
-            digitalWrite(SPD_x1, false);
-            timer1 = millis();
-        }
-    }
-}
-
-void moveAxis2()
-{
-    if (runProg == false)
-    {
-        return;
-    }
-
-    if (axis2.get_steps_to_move() > 0)
-    {
-        digitalWrite(DIR_x1, axis2.get_actuator_direction());
-        if (millis() - timer2 > PULSE_SPEED && a2On == false)
-        {
-            a2On = true;
-            axis2.reduceSteps();
-            // pulse high
-            digitalWrite(SPD_x2, true);
-            timer2 = millis();
-        }
-        if (millis() - timer2 > SPEED_ADJUSTED_G1 && a2On == true)
-        {
-            a2On = false;
-            // pulse low
-            digitalWrite(SPD_x2, false);
-            timer2 = millis();
-        }
-    }
-    else
-    {
-
-    }
-}
-*/
