@@ -54,8 +54,8 @@ Document
 #define axis6StartingAngle 0xB4
 
 // Balance stepper on / off state
-#define PULSE_SPEED_1 140                         
-#define PULSE_SPEED_2 10                         
+#define PULSE_SPEED_1 100//140                         
+#define PULSE_SPEED_2 50                         
 
 // CAN Bus vars
 long unsigned int rxId;
@@ -152,7 +152,7 @@ void readMSG()
     }
 }
 
-//#define DEBUG_CONTROLLER
+#define DEBUG_CONTROLLER
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
 {
@@ -515,11 +515,7 @@ void open_grip()
 // Execute movement commands
 void run()
 {
-    if (eStopActivated)
-    {
-        return;
-    }
-    if (runProg == false)
+    if ((eStopActivated) || (runProg == false))
     {
         return;
     }
@@ -677,8 +673,14 @@ void updateAxisPos()
         data[0] = (grip >> 2);
         data[0] |= (crc << 3);
 
-        CAN0.sendMsgBuf(TXID_POSITION, 0, 8, data);
-        timer = millis();
+        cli();
+        if (CAN0.mcp2515_tx_flag_status())
+        {
+            CAN0.mcp2515_set_tx_flag_status();
+            CAN0.sendMsgBuf(TXID_POSITION, 0, 8, data);
+            timer = millis();
+        }
+        sei();
     }
 }
 
@@ -713,7 +715,7 @@ void setup()
     delay(2000);
 #endif
 #if defined ARM2
-    delay(4100);
+    delay(2100);
 #endif
 
     // Disable interrupts
@@ -845,8 +847,6 @@ void CANBus_Debug()
         Serial.print("Stack Size: ");
         Serial.println(myStack.stack_size());
 
-        Serial.print("CAN Bus Pin: ");
-        Serial.println(CAN0.readMsgBuf(&rxId, &len, rxBuf));
         /*
         if (result1)
         {
