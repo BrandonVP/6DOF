@@ -34,11 +34,11 @@ public:
 	Actuator(uint16_t, uint16_t, uint16_t);
 	void move();
 	void reduceSteps();
-	void set_actuator(float new_pos_x1);
-	void set_current_angle(uint16_t current_angle);
-	void set_steps_to_move(uint32_t steps_to_move);
-	void set_actuator_direction(bool actuator_direction);
-	void set_enable_actuator(bool enable_actuator);
+	void set_actuator(float);
+	void set_current_angle(uint16_t);
+	void set_steps_to_move(uint32_t);
+	void set_actuator_direction(bool);
+	void set_enable_actuator(bool);
 	uint16_t get_current_angle();
 	uint32_t get_steps_to_move();
 	bool increment_current_angle();

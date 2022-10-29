@@ -31,9 +31,9 @@ class can_buffer
 private:
 	uint8_t bufferOutPtr = 0;
 	uint8_t bufferInPtr = 0;
-	struct CAN_Frame rxBuffer[BUFFER_SIZE];
+	struct CAN_Frame rxBuffer[BUFFER_SIZE + 1];
 public:
-	void push(struct CAN_Frame);
+	void push(long unsigned int, byte*);
 	void pop(struct CAN_Frame* bufOut);
 	void peek(struct CAN_Frame*);
 	void clear_buffer(void);

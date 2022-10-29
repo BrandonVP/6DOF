@@ -58,9 +58,9 @@ Document
 #define PULSE_SPEED_2 10                         
 
 // CAN Bus vars
-volatile long unsigned int rxId;
-volatile byte len = 0;
-volatile byte rxBuf[8];
+long unsigned int rxId;
+byte len = 0;
+byte rxBuf[8];
 
 MCP_CAN CAN0(49);
 
@@ -124,27 +124,22 @@ void MSGBuff()
 {
      // Read incoming message
     CAN0.readMsgBuf(&rxId, &len, rxBuf);
-
-    // TODO: eStop message should use CONTROL_RXID then define estop code
+    // TODO: Implement this code
     /*
     // Estop check
-    if (rxBuf[1] == 0x04)
+    if (rxId == ESTOP)
     {
-        if (rxBuf[2] == 0x02)
+        if (rxBuf[CMD] == ESTOP_ON)
         {
             eStopActivated = true;
         }
-        else if (rxBuf[2] == 0x01)
+        else if (rxBuf[CMD] == ESTOP_OFF)
         {
             eStopActivated = false;
         }
     }
     */
-
-    // Push message to stack
-    incoming.id = rxId;
-    memcpy((void*)incoming.data, (const void*)rxBuf, 8);
-    myStack.push(incoming);
+    myStack.push(rxId, rxBuf);
 }
 
 // Read and execute messages from buffer

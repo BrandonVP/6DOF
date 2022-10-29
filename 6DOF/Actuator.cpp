@@ -4,7 +4,6 @@
 
 #include "Actuator.h"
 
-
 Actuator::Actuator(uint16_t min, uint16_t max, uint16_t startingAngle)
 {
 	minAngle = min;
@@ -23,11 +22,11 @@ void Actuator::set_actuator(float new_pos_x1)
 
 	// Check min and max. If reached the movement value will be changes to either min or max 
 	// that way the program will still run but not exceed the max or min angle.
-	if (actuatorDirection && currentAngle - new_pos_x1 != 0 && new_pos_x1 > this->maxAngle)
+	if ((actuatorDirection) && (currentAngle - new_pos_x1 != 0) && (new_pos_x1 > this->maxAngle))
 	{
 		new_pos_x1 = this->maxAngle;
 	}
-	else if (currentAngle - new_pos_x1 != 0 && new_pos_x1 < this->minAngle)
+	else if ((currentAngle - new_pos_x1 != 0) && (new_pos_x1 < this->minAngle))
 	{
 		new_pos_x1 = this->minAngle;
 	}
