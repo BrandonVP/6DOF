@@ -14,19 +14,12 @@ Document
 
 - Design way for arm movements of different lengths to end together
 
+- Save arm positions to EEPROM
+- Implement wireless estop
+- Redesign Run
 ===========================================================
     End Todo List
 =========================================================*/
-
-
-
-// Uncomment an arm for upload
-//#define ARM1
-#define ARM2
-
-// Debug CAN Bus Connection
-//#define DEBUG_CANBUS
-
 #include <EEPROM.h>
 #include "Actuator.h"
 #include <mcp_can_dfs.h>
@@ -35,6 +28,12 @@ Document
 #include <SPI.h>
 #include "can_buffer.h"
 
+// Debug CAN Bus Connection
+//#define DEBUG_CANBUS
+
+// Uncomment an arm for upload
+//#define ARM1
+#define ARM2
 #if defined ARM1
     #include "ch1.h"
 #endif
@@ -42,7 +41,6 @@ Document
     #include "ch2.h"
 #endif
 
-#define BUFFER_SIZE 20
 #define REFRESH_RATE 100
 #define ANGLE_ACCELERATION 400
 
@@ -65,15 +63,6 @@ byte rxBuf[8];
 MCP_CAN CAN0(49);
 
 // Actuator objects - (min angle, max angle, current angle)
-
-/*
-Actuator axis1(40, 320, axis1StartingAngle);
-Actuator axis2(60, 300, axis2StartingAngle);
-Actuator axis3(45, 135, axis3StartingAngle);
-Actuator axis4(160, 200, axis4StartingAngle);
-Actuator axis5(160, 200, axis5StartingAngle);
-Actuator axis6(160, 200, axis6StartingAngle);
-*/
 Actuator axis1(0, 360, axis1StartingAngle);
 Actuator axis2(0, 360, axis2StartingAngle);
 Actuator axis3(0, 360, axis3StartingAngle);
@@ -152,12 +141,26 @@ void readMSG()
     }
 }
 
-#define DEBUG_CONTROLLER
+//#define DEBUG_CONTROLLER
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
 {
+    // RX Command List
+    #define CRC_BYTE                0x00 // For CONTROL and MANUAL
+    #define COMMAND_BYTE            0x01
+    // List of commands for the COMMAND_BYTE
+    #define SEND_AXIS_POSITIONS     0x01
+    #define RESET_AXIS_POSITION     0x02
+    #define SET_LOWER_AXIS_POSITION 0x03
+    #define SET_UPPER_AXIS_POSITION 0x04
+    #define MOVE_GRIP               0x0A
+    #define SET_WAIT_TIMER          0x0B
+    #define EXECUTE_PROGRAM         0x0C
+    #define CONFIRMATION            0x1C // Confirm message received
+
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    uint8_t crc = 0;
 
 #if defined DEBUG_CONTROLLER
     Serial.print("ID: ");
@@ -184,18 +187,8 @@ void controller(CAN_Frame buffer)
     switch (buffer.id)
     {
     case RXID_CONTROL:
-        // RX Command List
-        #define CRC_BYTE                0x00
-        #define COMMAND_BYTE            0x01
+       
 
-        #define SEND_AXIS_POSITIONS     0x01
-        #define RESET_AXIS_POSITION     0x02
-        #define SET_LOWER_AXIS_POSITION 0x03
-        #define SET_UPPER_AXIS_POSITION 0x04
-        #define MOVE_GRIP               0x0A
-        #define SET_WAIT_TIMER          0x0B
-        #define EXECUTE_PROGRAM         0x0C
-        
         /*
         if (!crcCheck)
         {
@@ -276,7 +269,7 @@ void controller(CAN_Frame buffer)
             }
         }
         /*=========================================================
-                    Executes Program
+                    Executes Program Move
         ===========================================================*/
         if (buffer.data[COMMAND_BYTE] == EXECUTE_PROGRAM)
         {
@@ -293,7 +286,7 @@ void controller(CAN_Frame buffer)
                             Program Next Move
         ===========================================================*/
         // Need these temp values to calculate "CRC"
-        uint8_t crc, grip;
+        uint8_t grip;
         uint16_t a1, a2, a3, a4, a5, a6;
 
         //|                          data                              |
@@ -324,60 +317,65 @@ void controller(CAN_Frame buffer)
         /*=========================================================
                Manual Control
         ===========================================================*/
+        crc = buffer.data[CRC_BYTE];
+        if (crc != (buffer.data[1] % 2) + (buffer.data[2] % 2) + (buffer.data[3] % 2) + 
+            (buffer.data[4] % 2) + (buffer.data[5] % 2) + (buffer.data[6] % 2) + (buffer.data[7] % 2) + 1)
+        {
+            break;
+        }
         if ((buffer.data[1] - 0x10) == 1)
         {
-            axis1.set_actuator(axis1.get_current_angle() - (buffer.data[0] * (buffer.data[1] - 0x10)));
+            axis1.set_actuator(axis1.get_current_angle() - (buffer.data[1] - 0x10));
         }
         else
         {
-            axis1.set_actuator(axis1.get_current_angle() + (buffer.data[0] * buffer.data[1]));
+            axis1.set_actuator(axis1.get_current_angle() + (buffer.data[1]));
         }
 
         if ((buffer.data[2] - 0x10) == 1)
         {
-            axis2.set_actuator(axis2.get_current_angle() - (buffer.data[0] * (buffer.data[2] - 0x10)));
+            axis2.set_actuator(axis2.get_current_angle() - (buffer.data[2] - 0x10));
         }
         else
         {
-            axis2.set_actuator(axis2.get_current_angle() + (buffer.data[0] * buffer.data[2]));
+            axis2.set_actuator(axis2.get_current_angle() + (buffer.data[2]));
         }
 
         if ((buffer.data[3] - 0x10) == 1)
         {
-            axis3.set_actuator(axis3.get_current_angle() - (buffer.data[0] * (buffer.data[3] - 0x10)));
+            axis3.set_actuator(axis3.get_current_angle() - ((buffer.data[3] - 0x10)));
         }
         else
         {
-            axis3.set_actuator(axis3.get_current_angle() + (buffer.data[0] * buffer.data[3]));
+            axis3.set_actuator(axis3.get_current_angle() + (buffer.data[3]));
         }
 
         if ((buffer.data[4] - 0x10) == 1)
         {
-            axis4.set_actuator(axis4.get_current_angle() - (buffer.data[0] * (buffer.data[4] - 0x10)));
+            axis4.set_actuator(axis4.get_current_angle() - ((buffer.data[4] - 0x10)));
         }
         else
         {
-            axis4.set_actuator(axis4.get_current_angle() + (buffer.data[0] * buffer.data[4]));
+            axis4.set_actuator(axis4.get_current_angle() + (buffer.data[4]));
         }
 
         if ((buffer.data[5] - 0x10) == 1)
         {
-            axis5.set_actuator(axis5.get_current_angle() - (buffer.data[0] * (buffer.data[5] - 0x10)));
+            axis5.set_actuator(axis5.get_current_angle() - ((buffer.data[5] - 0x10)));
         }
         else
         {
-            axis5.set_actuator(axis5.get_current_angle() + (buffer.data[0] * buffer.data[5]));
+            axis5.set_actuator(axis5.get_current_angle() + (buffer.data[5]));
         }
 
         if ((buffer.data[6] - 0x10) == 1)
         {
-            axis6.set_actuator(axis6.get_current_angle() - (buffer.data[0] * (buffer.data[6] - 0x10)));
+            axis6.set_actuator(axis6.get_current_angle() - ((buffer.data[6] - 0x10)));
         }
         else
         {
-            axis6.set_actuator(axis6.get_current_angle() + (buffer.data[0] * buffer.data[6]));
+            axis6.set_actuator(axis6.get_current_angle() + (buffer.data[6]));
         }
-
         if ((buffer.data[7] - 0x10) == 1)
         {
             analogWrite(MOTOR_IN2, 0);
@@ -812,7 +810,6 @@ void setup()
     //Serial.end();
 }
 
-
 #if defined DEBUG_CANBUS
 uint32_t CANBusDebugTimer = 0;
 uint32_t count1 = 0;
@@ -884,7 +881,6 @@ void CANBus_Debug()
     }
 #endif
 }
-
 
 // Main loop
 void loop()
