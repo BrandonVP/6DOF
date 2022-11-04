@@ -141,6 +141,11 @@ void readMSG()
     }
 }
 
+uint8_t generateByteCRC(volatile uint8_t* data)
+{
+    return ((data[0] % 2) + (data[1] % 2) + (data[2] % 2) + (data[3] % 2) + (data[4] % 2) + (data[5] % 2) + (data[6] % 2) + (data[7] % 2) + 1);
+}
+
 //#define DEBUG_CONTROLLER
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
@@ -148,15 +153,30 @@ void controller(CAN_Frame buffer)
     // RX Command List
     #define CRC_BYTE                0x00 // For CONTROL and MANUAL
     #define COMMAND_BYTE            0x01
+    #define ACCELERATION_BYTE       0x02
+    #define SPEED_BYTE              0x03
+    #define LOOP_BYTE               0x04
+    #define SUB_COMMAND_BYTE        0x05
+    #define GRIP_BYTE               0x06
+    #define SET_MIN_BYTE            0x02
+    #define SET_SEC_BYTE            0x03
+
     // List of commands for the COMMAND_BYTE
-    #define SEND_AXIS_POSITIONS     0x01
-    #define RESET_AXIS_POSITION     0x02
-    #define SET_LOWER_AXIS_POSITION 0x03
-    #define SET_UPPER_AXIS_POSITION 0x04
-    #define MOVE_GRIP               0x0A
-    #define SET_WAIT_TIMER          0x0B
-    #define EXECUTE_PROGRAM         0x0C
+    #define SEND_AXIS_POSITIONS     0x61
+    #define RESET_AXIS_POSITION     0x62
+    #define SET_LOWER_AXIS_POSITION 0x63
+    #define SET_UPPER_AXIS_POSITION 0x64
+    #define MOVE_GRIP               0x6A
+    #define HOLD_GRIP               0x00
+    #define OPEN_GRIP               0x01
+    #define SHUT_GRIP               0x11
+    #define SET_WAIT_TIMER          0x6B
+
+    #define EXECUTE_PROGRAM         0x1E // Execute Steps
+    #define STOP_PROGRAM            0x0E // Stop Steps
+
     #define CONFIRMATION            0x1C // Confirm message received
+    #define NEG_CONFIRMATION        0x0C // Confirm message not received or failed CRC
 
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -187,15 +207,11 @@ void controller(CAN_Frame buffer)
     switch (buffer.id)
     {
     case RXID_CONTROL:
-       
-
-        /*
-        if (!crcCheck)
+        // CRC Check
+        if (!(buffer.data[CRC_BYTE] = generateByteCRC(buffer.data)))
         {
             break;
         }
-        */
-        
         /*=========================================================
                     Send Current Axis Positions
         ===========================================================*/
@@ -251,19 +267,19 @@ void controller(CAN_Frame buffer)
         ===========================================================*/
         if (buffer.data[COMMAND_BYTE] == SET_WAIT_TIMER)
         {
-            uint8_t seconds = buffer.data[7];
-            uint8_t minutes = buffer.data[6];
+            uint8_t seconds = buffer.data[SET_SEC_BYTE];
+            uint8_t minutes = buffer.data[SET_MIN_BYTE];
         }
         /*=========================================================
                     Open/Close Grip
         ===========================================================*/
-        if (buffer.data[COMMAND_BYTE] == MOVE_GRIP)
+        if ((buffer.data[COMMAND_BYTE] == MOVE_GRIP) || (SUB_COMMAND_BYTE == MOVE_GRIP))
         {
-            if (buffer.data[6] == 0x01)
+            if (buffer.data[GRIP_BYTE] == OPEN_GRIP)
             {
                 open_grip();
             }
-            if (buffer.data[7] == 0x01)
+            if (buffer.data[GRIP_BYTE] == SHUT_GRIP)
             {
                 close_grip();
             }
@@ -271,9 +287,12 @@ void controller(CAN_Frame buffer)
         /*=========================================================
                     Executes Program Move
         ===========================================================*/
+        // |        ID       |  data[0] |   data[1]    |      data[2]      |   data[3]  |   data[4]
+        // | EXECUTE_PROGRAM | CRC_BYTE | COMMAND_BYTE | ACCELERATION_BYTE | SPEED_BYTE |  LOOP_BYTE
+
         if (buffer.data[COMMAND_BYTE] == EXECUTE_PROGRAM)
         {
-            returnData[1] = 0x03;
+            returnData[1] = CONFIRMATION;
             CAN0.sendMsgBuf(TXID_CONTROLLER, 0, 8, returnData);
             runProg = true;
             runSetup = true;
@@ -306,11 +325,11 @@ void controller(CAN_Frame buffer)
         if (crc == (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1)
         {
             axis1.set_actuator(a1);
-            axis1.set_actuator(a2);
-            axis1.set_actuator(a3);
-            axis1.set_actuator(a4);
-            axis1.set_actuator(a5);
-            axis1.set_actuator(a6);
+            axis2.set_actuator(a2);
+            axis3.set_actuator(a3);
+            axis4.set_actuator(a4);
+            axis5.set_actuator(a5);
+            axis6.set_actuator(a6);
         }
         break;
     case RXID_MANUAL:
