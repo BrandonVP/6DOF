@@ -17,6 +17,9 @@ Document
 - Save arm positions to EEPROM
 - Implement wireless estop
 - Redesign Run
+
+- Research CRC generation
+
 ===========================================================
     End Todo List
 =========================================================*/
@@ -41,7 +44,7 @@ Document
     #include "ch2.h"
 #endif
 
-#define REFRESH_RATE 100
+#define REFRESH_RATE 1000
 #define ANGLE_ACCELERATION 400
 
 #define axis1StartingAngle 0xB4
@@ -141,17 +144,80 @@ void readMSG()
     }
 }
 
+/*
+// A very simple "CRC" generator
 uint8_t generateByteCRC(volatile uint8_t* data)
 {
     return ((data[0] % 2) + (data[1] % 2) + (data[2] % 2) + (data[3] % 2) + (data[4] % 2) + (data[5] % 2) + (data[6] % 2) + (data[7] % 2) + 1);
 }
+*/
+/*=========================================================
+CRC - https://barrgroup.com/embedded-systems/how-to/crc-calculation-c-code
+===========================================================*/
+#define POLYNOMIAL 0xD8  /* 11011 followed by 0's */
 
-//#define DEBUG_CONTROLLER
+/*
+ * The width of the CRC calculation and result.
+ * Modify the typedef for a 16 or 32-bit CRC standard.
+ */
+
+#define WIDTH  (8 * sizeof(uint8_t))
+#define TOPBIT (1 << (WIDTH - 1))
+
+uint8_t  crcTable[256];
+
+void initCRC(void)
+{
+    uint8_t  remainder;
+
+    // Compute the remainder of each possible dividend
+    for (int dividend = 0; dividend < 256; ++dividend)
+    {
+        //Start with the dividend followed by zeros
+        remainder = dividend << (WIDTH - 8);
+
+        // Perform modulo-2 division, a bit at a time
+        for (uint8_t bit = 8; bit > 0; --bit)
+        {
+            // Try to divide the current data bit.
+            if (remainder & TOPBIT)
+            {
+                remainder = (remainder << 1) ^ POLYNOMIAL;
+            }
+            else
+            {
+                remainder = (remainder << 1);
+            }
+        }
+
+        // Store the result into the table.
+        crcTable[dividend] = remainder;
+    }
+}
+
+uint8_t generateCRC(volatile uint8_t message[], int nBytes)
+{
+    uint8_t data;
+    uint8_t remainder = 0;
+
+    // Divide the message by the polynomial, a byte at a time.
+    for (int byte = 0; byte < nBytes; ++byte)
+    {
+        data = message[byte] ^ (remainder >> (WIDTH - 8));
+        remainder = crcTable[data] ^ (remainder << 8);
+    }
+
+    // The final remainder is the CRC.
+    return (remainder);
+} 
+
+
+#define DEBUG_CONTROLLER
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
 {
     // RX Command List
-    #define CRC_BYTE                0x00 // For CONTROL and MANUAL
+    #define CRC_BYTE                0x07 // For CONTROL and MANUAL
     #define COMMAND_BYTE            0x01
     #define ACCELERATION_BYTE       0x02
     #define SPEED_BYTE              0x03
@@ -208,7 +274,10 @@ void controller(CAN_Frame buffer)
     {
     case RXID_CONTROL:
         // CRC Check
-        if (!(buffer.data[CRC_BYTE] = generateByteCRC(buffer.data)))
+        //Serial.print(buffer.data[CRC_BYTE]);
+        //Serial.print(" = ");
+        //Serial.println(generateCRC(buffer.data, 7));
+        if (!(buffer.data[CRC_BYTE] = generateCRC(buffer.data, 7)))
         {
             break;
         }
@@ -336,9 +405,7 @@ void controller(CAN_Frame buffer)
         /*=========================================================
                Manual Control
         ===========================================================*/
-        crc = buffer.data[CRC_BYTE];
-        if (crc != (buffer.data[1] % 2) + (buffer.data[2] % 2) + (buffer.data[3] % 2) + 
-            (buffer.data[4] % 2) + (buffer.data[5] % 2) + (buffer.data[6] % 2) + (buffer.data[7] % 2) + 1)
+        if (!(buffer.data[CRC_BYTE] == generateCRC(buffer.data, 7)))
         {
             break;
         }
@@ -348,6 +415,7 @@ void controller(CAN_Frame buffer)
         }
         else
         {
+            Serial.println("here");
             axis1.set_actuator(axis1.get_current_angle() + (buffer.data[1]));
         }
 
@@ -670,6 +738,7 @@ void updateAxisPos()
         uint16_t a4 = axis4.get_current_angle();
         uint16_t a5 = axis5.get_current_angle();
         uint16_t a6 = axis6.get_current_angle();
+
         // TODO: Add grip value after the grip function is updated
         uint8_t grip = 0;
         uint8_t crc = (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1;
@@ -827,6 +896,8 @@ void setup()
     axis6.set_current_angle(temp);
     */
     //Serial.end();
+
+    initCRC();
 }
 
 #if defined DEBUG_CANBUS
