@@ -4,8 +4,11 @@
 
 #include "Actuator.h"
 
-Actuator::Actuator(uint16_t min, uint16_t max, uint16_t startingAngle)
+Actuator::Actuator(uint8_t pPin, uint8_t dPin, uint8_t ePin, uint16_t min, uint16_t max, uint16_t startingAngle)
 {
+	pulsePin = pPin;
+	directionPin = dPin;
+	enablePin = ePin;
 	minAngle = min;
 	maxAngle = max;
 	currentAngle = startingAngle;
@@ -59,25 +62,25 @@ void Actuator::move()
 	readyToMove = false;
 }
 
-void Actuator::set_current_angle(uint16_t currentAngle) {
+void Actuator::set_deg(uint16_t currentAngle) {
 	this->currentAngle = currentAngle;
 }
 
-bool Actuator::increment_current_angle() 
+bool Actuator::increment_deg() 
 {
-	(this->get_actuator_direction()) ? this->currentAngle++ : this->currentAngle--;
+	(this->get_direction()) ? this->currentAngle++ : this->currentAngle--;
 	return true;
 }
 
-uint16_t Actuator::get_current_angle() {
+uint16_t Actuator::get_deg() {
 	return currentAngle;
 }
 
-void Actuator::set_steps_to_move(uint32_t stepsToMove) {
+void Actuator::set_steps(uint32_t stepsToMove) {
 	this->stepsToMove = stepsToMove;
 }
 
-uint32_t Actuator::get_steps_to_move() {
+uint32_t Actuator::get_steps() {
 	return stepsToMove;
 }
 
@@ -86,18 +89,18 @@ void Actuator::reduceSteps()
 	stepsToMove--;
 }
 
-void Actuator::set_actuator_direction(bool actuatorDirection) {
+void Actuator::set_direction(bool actuatorDirection) {
 	this->actuatorDirection = actuatorDirection;
 }
 
-bool Actuator::get_actuator_direction() {
+bool Actuator::get_direction() {
 	return actuatorDirection;
 }
 
-void Actuator::set_enable_actuator(bool enableActuator) {
+void Actuator::set_enable(bool enableActuator) {
 	this->enableActuator = enableActuator;
 }
 
-bool Actuator::get_enable_actuator() {
+bool Actuator::get_enable() {
 	return enableActuator;
 }

@@ -7,18 +7,17 @@
 /*=========================================================
     Todo List
 ===========================================================
-Document
+- Document
 - Better comments and improved naming convention
 - Error / Range checking
 - Acceleration set by controller
+- Wait cmd
 
 - Design way for arm movements of different lengths to end together
 
 - Save arm positions to EEPROM
 - Implement wireless estop
 - Redesign Run
-
-- Research CRC generation
 
 ===========================================================
     End Todo List
@@ -35,8 +34,8 @@ Document
 //#define DEBUG_CANBUS
 
 // Uncomment an arm for upload
-//#define ARM1
-#define ARM2
+#define ARM1
+//#define ARM2
 #if defined ARM1
     #include "ch1.h"
 #endif
@@ -44,7 +43,7 @@ Document
     #include "ch2.h"
 #endif
 
-#define REFRESH_RATE 1000
+#define REFRESH_RATE 100
 #define ANGLE_ACCELERATION 400
 
 #define axis1StartingAngle 0xB4
@@ -66,12 +65,12 @@ byte rxBuf[8];
 MCP_CAN CAN0(49);
 
 // Actuator objects - (min angle, max angle, current angle)
-Actuator axis1(0, 360, axis1StartingAngle);
-Actuator axis2(0, 360, axis2StartingAngle);
-Actuator axis3(0, 360, axis3StartingAngle);
-Actuator axis4(0, 360, axis4StartingAngle);
-Actuator axis5(0, 360, axis5StartingAngle);
-Actuator axis6(0, 360, axis6StartingAngle);
+Actuator axis1(SPD_x1, DIR_x1, ENA_x1, 1, 359, axis1StartingAngle);
+Actuator axis2(SPD_y1, DIR_y1, ENA_y1, 1, 359, axis2StartingAngle);
+Actuator axis3(SPD_z1, DIR_z1, ENA_z1, 1, 359, axis3StartingAngle);
+Actuator axis4(SPD_x2, DIR_x2, ENA_x2, 1, 359, axis4StartingAngle);
+Actuator axis5(SPD_y2, DIR_y2, ENA_y2, 1, 359, axis5StartingAngle);
+Actuator axis6(SPD_z2, DIR_z2, ENA_z2, 1, 359, axis6StartingAngle);
 
 bool hasAcceleration = true;
 bool runSetup = false;
@@ -230,8 +229,7 @@ void controller(CAN_Frame buffer)
     // List of commands for the COMMAND_BYTE
     #define SEND_AXIS_POSITIONS     0x61
     #define RESET_AXIS_POSITION     0x62
-    #define SET_LOWER_AXIS_POSITION 0x63
-    #define SET_UPPER_AXIS_POSITION 0x64
+    #define HOME_AXIS_POSITION      0x63
     #define MOVE_GRIP               0x6A
     #define HOLD_GRIP               0x00
     #define OPEN_GRIP               0x01
@@ -294,42 +292,26 @@ void controller(CAN_Frame buffer)
         ===========================================================*/
         if (buffer.data[COMMAND_BYTE] == RESET_AXIS_POSITION)
         {
-            axis1.set_current_angle(0xB4);
-            axis2.set_current_angle(0xB4);
-            axis3.set_current_angle(0x5A);
-            axis4.set_current_angle(0xB4);
-            axis5.set_current_angle(0xB4);
-            axis6.set_current_angle(0xB4);
+            axis1.set_deg(0xB4);
+            axis2.set_deg(0xB4);
+            axis3.set_deg(0x5A);
+            axis4.set_deg(0xB4);
+            axis5.set_deg(0xB4);
+            axis6.set_deg(0xB4);
         }
         /*=========================================================
-               Set next angles for bottom three axis
+                                HOME ARM
         ===========================================================*/
-        if (buffer.data[COMMAND_BYTE] == SET_LOWER_AXIS_POSITION)
+        if (buffer.data[COMMAND_BYTE] == HOME_AXIS_POSITION)
         {
-            if ((buffer.data[2] + buffer.data[3]) > 0) {
-                axis1.set_actuator(buffer.data[2] + buffer.data[3]);
-            }
-            if ((buffer.data[4] + buffer.data[5]) > 0) {
-                axis2.set_actuator(buffer.data[4] + buffer.data[5]);
-            }
-            if ((buffer.data[6] + buffer.data[7]) > 0) {
-                axis3.set_actuator(buffer.data[6] + buffer.data[7]);
-            }
-        }
-        /*=========================================================
-               Set next angles for top three axis
-        ===========================================================*/
-        if (buffer.data[COMMAND_BYTE] == SET_UPPER_AXIS_POSITION)
-        {
-            if ((buffer.data[2] + buffer.data[3]) > 0) {
-                axis4.set_actuator(buffer.data[2] + buffer.data[3]);
-            }
-            if ((buffer.data[4] + buffer.data[5]) > 0) {
-                axis5.set_actuator(buffer.data[4] + buffer.data[5]);
-            }
-            if ((buffer.data[6] + buffer.data[7]) > 0) {
-                axis6.set_actuator(buffer.data[6] + buffer.data[7]);
-            }
+            axis1.set_actuator(axis1StartingAngle);
+            axis2.set_actuator(axis2StartingAngle);
+            axis3.set_actuator(axis3StartingAngle);
+            axis4.set_actuator(axis4StartingAngle);
+            axis5.set_actuator(axis5StartingAngle);
+            axis6.set_actuator(axis6StartingAngle);
+
+            buffer.data[COMMAND_BYTE] = EXECUTE_PROGRAM;
         }
         /*=========================================================
                     Set Wait Timer
@@ -383,15 +365,28 @@ void controller(CAN_Frame buffer)
 
         //|  crc  |  grip |   a6   |   a5   |   a4   |   a3   |   a2   |   a1   |
         //|  0-4  |  5-9  |  10-18 |  19-27 |  28-36 |  37-45 |  46-54 |  55-63 |
-        a1 = ((buffer.data[6] & 0x01) << 8)   | buffer.data[7];
-        a2 = (((buffer.data[5] & 0x03)) << 7) | (buffer.data[6] >> 1);
-        a3 = (((buffer.data[4] & 0x07)) << 6) | (buffer.data[5] >> 2);
-        a4 = (((buffer.data[3] & 0x0F)) << 5) | (buffer.data[4] >> 3);
-        a5 = (((buffer.data[2] & 0x1F)) << 4) | (buffer.data[3] >> 4);
-        a6 = (((buffer.data[1] & 0x3F)) << 3) | (buffer.data[2] >> 5);
-        grip = ((buffer.data[0] & 0x7) << 2)  | (buffer.data[1] >> 6);
-        crc = ((buffer.data[0]) >> 3);
-        if (crc == (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1)
+        a1 = ((buffer.data[5] & 0x01) << 8)   | buffer.data[6];
+        a2 = (((buffer.data[4] & 0x03)) << 7) | (buffer.data[5] >> 1);
+        a3 = (((buffer.data[3] & 0x07)) << 6) | (buffer.data[4] >> 2);
+        a4 = (((buffer.data[2] & 0x0F)) << 5) | (buffer.data[3] >> 3);
+        a5 = (((buffer.data[1] & 0x1F)) << 4) | (buffer.data[2] >> 4);
+        a6 = (((buffer.data[0] & 0x3F)) << 3) | (buffer.data[1] >> 5);
+        grip = (buffer.data[0] >> 6);
+        //grip = ((buffer.data[0] & 0x7) << 2)  | (buffer.data[1] >> 6);
+        crc = (buffer.data[7]);
+
+        Serial.print(a1);
+        Serial.print(" ");        
+        Serial.print(a2);
+        Serial.print(" ");        
+        Serial.print(a3);
+        Serial.print(" ");        
+        Serial.print(a4);
+        Serial.print(" ");        
+        Serial.print(a5);
+        Serial.print(" ");        
+        Serial.println(a6);
+        if (crc == generateCRC(buffer.data, 7))
         {
             axis1.set_actuator(a1);
             axis2.set_actuator(a2);
@@ -411,57 +406,56 @@ void controller(CAN_Frame buffer)
         }
         if ((buffer.data[1] - 0x10) == 1)
         {
-            axis1.set_actuator(axis1.get_current_angle() - (buffer.data[1] - 0x10));
+            axis1.set_actuator(axis1.get_deg() - (buffer.data[1] - 0x10));
         }
         else
         {
-            Serial.println("here");
-            axis1.set_actuator(axis1.get_current_angle() + (buffer.data[1]));
+            axis1.set_actuator(axis1.get_deg() + (buffer.data[1]));
         }
 
         if ((buffer.data[2] - 0x10) == 1)
         {
-            axis2.set_actuator(axis2.get_current_angle() - (buffer.data[2] - 0x10));
+            axis2.set_actuator(axis2.get_deg() - (buffer.data[2] - 0x10));
         }
         else
         {
-            axis2.set_actuator(axis2.get_current_angle() + (buffer.data[2]));
+            axis2.set_actuator(axis2.get_deg() + (buffer.data[2]));
         }
 
         if ((buffer.data[3] - 0x10) == 1)
         {
-            axis3.set_actuator(axis3.get_current_angle() - ((buffer.data[3] - 0x10)));
+            axis3.set_actuator(axis3.get_deg() - ((buffer.data[3] - 0x10)));
         }
         else
         {
-            axis3.set_actuator(axis3.get_current_angle() + (buffer.data[3]));
+            axis3.set_actuator(axis3.get_deg() + (buffer.data[3]));
         }
 
         if ((buffer.data[4] - 0x10) == 1)
         {
-            axis4.set_actuator(axis4.get_current_angle() - ((buffer.data[4] - 0x10)));
+            axis4.set_actuator(axis4.get_deg() - ((buffer.data[4] - 0x10)));
         }
         else
         {
-            axis4.set_actuator(axis4.get_current_angle() + (buffer.data[4]));
+            axis4.set_actuator(axis4.get_deg() + (buffer.data[4]));
         }
 
         if ((buffer.data[5] - 0x10) == 1)
         {
-            axis5.set_actuator(axis5.get_current_angle() - ((buffer.data[5] - 0x10)));
+            axis5.set_actuator(axis5.get_deg() - ((buffer.data[5] - 0x10)));
         }
         else
         {
-            axis5.set_actuator(axis5.get_current_angle() + (buffer.data[5]));
+            axis5.set_actuator(axis5.get_deg() + (buffer.data[5]));
         }
 
         if ((buffer.data[6] - 0x10) == 1)
         {
-            axis6.set_actuator(axis6.get_current_angle() - ((buffer.data[6] - 0x10)));
+            axis6.set_actuator(axis6.get_deg() - ((buffer.data[6] - 0x10)));
         }
         else
         {
-            axis6.set_actuator(axis6.get_current_angle() + (buffer.data[6]));
+            axis6.set_actuator(axis6.get_deg() + (buffer.data[6]));
         }
         if ((buffer.data[7] - 0x10) == 1)
         {
@@ -495,26 +489,26 @@ void controller(CAN_Frame buffer)
 // Finds longest distance to move from all 6 axis
 uint32_t findLargest()
 {
-    uint32_t temp = axis1.get_steps_to_move();
-    if (axis2.get_steps_to_move() > temp)
+    uint32_t temp = axis1.get_steps();
+    if (axis2.get_steps() > temp)
     {
-        temp = axis2.get_steps_to_move();
+        temp = axis2.get_steps();
     }
-    if (axis3.get_steps_to_move() > temp)
+    if (axis3.get_steps() > temp)
     {
-        temp = axis3.get_steps_to_move();
+        temp = axis3.get_steps();
     }
-    if (axis4.get_steps_to_move() > temp)
+    if (axis4.get_steps() > temp)
     {
-        temp = axis4.get_steps_to_move();
+        temp = axis4.get_steps();
     }
-    if (axis5.get_steps_to_move() > temp)
+    if (axis5.get_steps() > temp)
     {
-        temp = axis5.get_steps_to_move();
+        temp = axis5.get_steps();
     }
-    if (axis6.get_steps_to_move() > temp)
+    if (axis6.get_steps() > temp)
     {
-        temp = axis6.get_steps_to_move();
+        temp = axis6.get_steps();
     }
     return temp;
 }
@@ -616,68 +610,68 @@ void run()
     delayMicroseconds(PULSE_SPEED_2 + acceleration);
     if (runIndex < maxStep && delayState == true )
     {
-        if ((runIndex < axis1.get_steps_to_move()))
+        if ((runIndex < axis1.get_steps()))
         {
-            digitalWrite(DIR_x1, axis1.get_actuator_direction());
+            digitalWrite(DIR_x1, axis1.get_direction());
             digitalWrite(SPD_x1, true);
-            (count == 337) && (axis1.increment_current_angle());
+            (count == 337) && (axis1.increment_deg());
         }
-        else if (runIndex == axis1.get_steps_to_move())
+        else if (runIndex == axis1.get_steps())
         {
             axis1.move();
         }
 
-        if ((runIndex < axis4.get_steps_to_move()))
+        if ((runIndex < axis4.get_steps()))
         {
-            digitalWrite(DIR_x2, axis4.get_actuator_direction());
+            digitalWrite(DIR_x2, axis4.get_direction());
             digitalWrite(SPD_x2, true);
-            (count == 337) && (axis4.increment_current_angle());
+            (count == 337) && (axis4.increment_deg());
         }
-        else if (runIndex == axis4.get_steps_to_move())
+        else if (runIndex == axis4.get_steps())
         {
             axis4.move();
         }
 
-        if (runIndex < axis2.get_steps_to_move())
+        if (runIndex < axis2.get_steps())
         {
-            digitalWrite(DIR_y1, axis2.get_actuator_direction());
+            digitalWrite(DIR_y1, axis2.get_direction());
             digitalWrite(SPD_y1, true);
-            (count == 337) && (axis2.increment_current_angle());
+            (count == 337) && (axis2.increment_deg());
         }
-        else if (runIndex == axis2.get_steps_to_move())
+        else if (runIndex == axis2.get_steps())
         {
             axis2.move();
         }
 
-        if (runIndex < axis5.get_steps_to_move())
+        if (runIndex < axis5.get_steps())
         {
-            digitalWrite(DIR_y2, axis5.get_actuator_direction());
+            digitalWrite(DIR_y2, axis5.get_direction());
             digitalWrite(SPD_y2, true);
-            (count == 337) && (axis5.increment_current_angle());
+            (count == 337) && (axis5.increment_deg());
         }
-        else if (runIndex == axis5.get_steps_to_move())
+        else if (runIndex == axis5.get_steps())
         {
             axis5.move();
         }
 
-        if (runIndex < axis3.get_steps_to_move())
+        if (runIndex < axis3.get_steps())
         {
-            digitalWrite(DIR_z1, axis3.get_actuator_direction());
+            digitalWrite(DIR_z1, axis3.get_direction());
             digitalWrite(SPD_z1, true);
-            (count == 337) && (axis3.increment_current_angle());
+            (count == 337) && (axis3.increment_deg());
         }
-        else if (runIndex == axis3.get_steps_to_move())
+        else if (runIndex == axis3.get_steps())
         {
             axis3.move();
         }
 
-        if (runIndex < axis6.get_steps_to_move())
+        if (runIndex < axis6.get_steps())
         {
-            digitalWrite(DIR_z2, axis6.get_actuator_direction());
+            digitalWrite(DIR_z2, axis6.get_direction());
             digitalWrite(SPD_z2, true);
-            (count == 337) && (axis6.increment_current_angle());
+            (count == 337) && (axis6.increment_deg());
         }
-        else if (runIndex == axis6.get_steps_to_move())
+        else if (runIndex == axis6.get_steps())
         {
             axis6.move();
         }
@@ -732,32 +726,31 @@ void updateAxisPos()
     if (CAN0.mcp2515_tx_flag_status() == true && millis() - timer > REFRESH_RATE)
     {
         uint8_t data[8];
-        uint16_t a1 = axis1.get_current_angle();
-        uint16_t a2 = axis2.get_current_angle();
-        uint16_t a3 = axis3.get_current_angle();
-        uint16_t a4 = axis4.get_current_angle();
-        uint16_t a5 = axis5.get_current_angle();
-        uint16_t a6 = axis6.get_current_angle();
+        uint16_t a1 = axis1.get_deg();
+        uint16_t a2 = axis2.get_deg();
+        uint16_t a3 = axis3.get_deg();
+        uint16_t a4 = axis4.get_deg();
+        uint16_t a5 = axis5.get_deg();
+        uint16_t a6 = axis6.get_deg();
 
         // TODO: Add grip value after the grip function is updated
         uint8_t grip = 0;
         uint8_t crc = (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1;
 
-        data[7] = (a1 & 0xFF);
-        data[6] = (a1 >> 8);
-        data[6] |= ((a2 & 0xFF) << 1);
-        data[5] = (a2 >> 7);
-        data[5] |= ((a3 & 0x7F) << 2);
-        data[4] = (a3 >> 6);
-        data[4] |= ((a4 & 0x3F) << 3);
-        data[3] = (a4 >> 5);
-        data[3] |= ((a5 & 0x1F) << 4);
-        data[2] = (a5 >> 4);
-        data[2] |= ((a6 & 0xF) << 5);
-        data[1] = (a6 >> 3);
-        data[1] |= ((grip & 0x7) << 6);
-        data[0] = (grip >> 2);
-        data[0] |= (crc << 3);
+        data[6] = (a1 & 0xFF);
+        data[5] = (a1 >> 8);
+        data[5] |= ((a2 & 0xFF) << 1);
+        data[4] = (a2 >> 7);
+        data[4] |= ((a3 & 0x7F) << 2);
+        data[3] = (a3 >> 6);
+        data[3] |= ((a4 & 0x3F) << 3);
+        data[2] = (a4 >> 5);
+        data[2] |= ((a5 & 0x1F) << 4);
+        data[1] = (a5 >> 4);
+        data[1] |= ((a6 & 0xF) << 5);
+        data[0] = (a6 >> 3);
+        data[0] |= ((grip & 0x7) << 6);
+        data[7] = generateCRC(data, 7);
 
         cli();
         if (CAN0.mcp2515_tx_flag_status())

@@ -21,29 +21,33 @@
 class Actuator
 {
 protected:
-	float currentAngle = 0;       
-	float nextAngle = 0;			 
+	uint8_t pulsePin;
+	uint8_t directionPin;
+	uint8_t enablePin;
 	uint16_t maxAngle;
 	uint16_t minAngle;
+	float currentAngle;     
+
+	float nextAngle = 0;	
 	uint32_t stepsToMove = 0;   
 	bool actuatorDirection = true;		
 	bool enableActuator = true;    
 	bool readyToMove = false;
 
 public:
-	Actuator(uint16_t, uint16_t, uint16_t);
+	Actuator(uint8_t, uint8_t, uint8_t, uint16_t, uint16_t, uint16_t);
 	void move();
 	void reduceSteps();
 	void set_actuator(float);
-	void set_current_angle(uint16_t);
-	void set_steps_to_move(uint32_t);
-	void set_actuator_direction(bool);
-	void set_enable_actuator(bool);
-	uint16_t get_current_angle();
-	uint32_t get_steps_to_move();
-	bool increment_current_angle();
-	bool get_actuator_direction();
-	bool get_enable_actuator();
+	void set_deg(uint16_t);
+	void set_steps(uint32_t);
+	void set_direction(bool);
+	void set_enable(bool);
+	uint16_t get_deg();
+	uint32_t get_steps();
+	bool increment_deg();
+	bool get_direction();
+	bool get_enable();
 };
 
 #endif
