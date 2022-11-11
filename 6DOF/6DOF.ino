@@ -215,6 +215,11 @@ uint8_t generateCRC(volatile uint8_t message[], int nBytes)
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
 {
+#if defined DEBUG_CONTROLLER
+    char msgOut[80];
+    sprintf(msgOut, "%3X  %2X %2X %2X %2X %2X %2X %2X %2X", buffer.id, buffer.data[0], buffer.data[1], buffer.data[2], buffer.data[3], buffer.data[4], buffer.data[5], buffer.data[6], buffer.data[7]);
+    Serial.println(msgOut);
+#endif
     // RX Command List
     #define CRC_BYTE                0x07 // For CONTROL and MANUAL
     #define COMMAND_BYTE            0x01
@@ -242,39 +247,23 @@ void controller(CAN_Frame buffer)
     #define CONFIRMATION            0x1C // Confirm message received
     #define NEG_CONFIRMATION        0x0C // Confirm message not received or failed CRC
 
+#if defined DEBUG_CONTROLLER
+    char crcOut[80];
+    sprintf(crcOut, "%3d == %3d", buffer.data[CRC_BYTE], generateCRC(buffer.data, 7));
+    Serial.println(msgOut);
+#endif
+
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    uint8_t crc = 0;
+    if (!(buffer.data[CRC_BYTE] == generateCRC(buffer.data, 7)))
+    {
+        return;
+    }
 
-#if defined DEBUG_CONTROLLER
-    Serial.print("ID: ");
-    Serial.print(buffer.id, 16);
-    Serial.print("   Data: ");
-    Serial.print(buffer.data[0], 16);
-    Serial.print(" ");
-    Serial.print(buffer.data[1], 16);
-    Serial.print(" ");
-    Serial.print(buffer.data[2], 16);
-    Serial.print(" ");
-    Serial.print(buffer.data[3], 16);
-    Serial.print(" ");
-    Serial.print(buffer.data[4], 16);
-    Serial.print(" ");
-    Serial.print(buffer.data[5], 16);
-    Serial.print(" ");
-    Serial.print(buffer.data[6], 16);
-    Serial.print(" ");
-    Serial.print(buffer.data[7], 16);
-    Serial.println();
-#endif
     // 
     switch (buffer.id)
     {
     case RXID_CONTROL:
-        // CRC Check
-        //Serial.print(buffer.data[CRC_BYTE]);
-        //Serial.print(" = ");
-        //Serial.println(generateCRC(buffer.data, 7));
         if (!(buffer.data[CRC_BYTE] = generateCRC(buffer.data, 7)))
         {
             break;
@@ -372,38 +361,24 @@ void controller(CAN_Frame buffer)
         a5 = (((buffer.data[1] & 0x1F)) << 4) | (buffer.data[2] >> 4);
         a6 = (((buffer.data[0] & 0x3F)) << 3) | (buffer.data[1] >> 5);
         grip = (buffer.data[0] >> 6);
-        //grip = ((buffer.data[0] & 0x7) << 2)  | (buffer.data[1] >> 6);
-        crc = (buffer.data[7]);
 
-        Serial.print(a1);
-        Serial.print(" ");        
-        Serial.print(a2);
-        Serial.print(" ");        
-        Serial.print(a3);
-        Serial.print(" ");        
-        Serial.print(a4);
-        Serial.print(" ");        
-        Serial.print(a5);
-        Serial.print(" ");        
-        Serial.println(a6);
-        if (crc == generateCRC(buffer.data, 7))
-        {
-            axis1.set_actuator(a1);
-            axis2.set_actuator(a2);
-            axis3.set_actuator(a3);
-            axis4.set_actuator(a4);
-            axis5.set_actuator(a5);
-            axis6.set_actuator(a6);
-        }
+#ifdef DEBUG_CONTROLLER
+        char axisOutput[50];
+        sprintf(axisOutput, "%3d %3d %3d %3d %3d %3d", a1, a2, a3, a4, a5, a6);
+        Serial.println(axisOutput);
+#endif
+
+        axis1.set_actuator(a1);
+        axis2.set_actuator(a2);
+        axis3.set_actuator(a3);
+        axis4.set_actuator(a4);
+        axis5.set_actuator(a5);
+        axis6.set_actuator(a6);
         break;
     case RXID_MANUAL:
         /*=========================================================
                Manual Control
         ===========================================================*/
-        if (!(buffer.data[CRC_BYTE] == generateCRC(buffer.data, 7)))
-        {
-            break;
-        }
         if ((buffer.data[1] - 0x10) == 1)
         {
             axis1.set_actuator(axis1.get_deg() - (buffer.data[1] - 0x10));
@@ -606,6 +581,110 @@ void run()
         count = 0;
     }
 
+    if (runIndex < axis1.get_steps() || runIndex < axis2.get_steps() || runIndex < axis3.get_steps() || runIndex < axis4.get_steps() || runIndex < axis5.get_steps() || runIndex < axis6.get_steps())
+    {
+        if ((runIndex < axis1.get_steps()))
+        {
+            digitalWrite(DIR_x1, axis1.get_direction());
+            digitalWrite(SPD_x1, true);
+            (count == 337) && (axis1.increment_deg());
+        }
+        else if (runIndex == axis1.get_steps())
+        {
+            axis1.move();
+        }
+
+        if ((runIndex < axis4.get_steps()))
+        {
+            digitalWrite(DIR_x2, axis4.get_direction());
+            digitalWrite(SPD_x2, true);
+            (count == 337) && (axis4.increment_deg());
+        }
+        else if (runIndex == axis4.get_steps())
+        {
+            axis4.move();
+        }
+
+        if (runIndex < axis2.get_steps())
+        {
+            digitalWrite(DIR_y1, axis2.get_direction());
+            digitalWrite(SPD_y1, true);
+            (count == 337) && (axis2.increment_deg());
+        }
+        else if (runIndex == axis2.get_steps())
+        {
+            axis2.move();
+        }
+
+        if (runIndex < axis5.get_steps())
+        {
+            digitalWrite(DIR_y2, axis5.get_direction());
+            digitalWrite(SPD_y2, true);
+            (count == 337) && (axis5.increment_deg());
+        }
+        else if (runIndex == axis5.get_steps())
+        {
+            axis5.move();
+        }
+
+        if (runIndex < axis3.get_steps())
+        {
+            digitalWrite(DIR_z1, axis3.get_direction());
+            digitalWrite(SPD_z1, true);
+            (count == 337) && (axis3.increment_deg());
+        }
+        else if (runIndex == axis3.get_steps())
+        {
+            axis3.move();
+        }
+
+        if (runIndex < axis6.get_steps())
+        {
+            digitalWrite(DIR_z2, axis6.get_direction());
+            digitalWrite(SPD_z2, true);
+            (count == 337) && (axis6.increment_deg());
+        }
+        else if (runIndex == axis6.get_steps())
+        {
+            axis6.move();
+        }
+
+
+        delayMicroseconds(PULSE_SPEED_1 + acceleration);
+        digitalWrite(SPD_x1, false);
+        digitalWrite(SPD_x2, false);
+        digitalWrite(SPD_y1, false);
+        digitalWrite(SPD_y2, false);
+        digitalWrite(SPD_z1, false);
+        digitalWrite(SPD_z2, false);
+
+        runIndex++;
+        if (hasAcceleration == true)
+        {
+            if (acceleration > 0 && maxStep - runIndex > ANGLE_ACCELERATION) {
+                acceleration--;
+            }
+            else if (maxStep - runIndex <= ANGLE_ACCELERATION)
+            {
+                acceleration++;
+            }
+        }
+        delayState = true;
+        (count > 337) ? count = 0 : count++;
+    }
+    if (runIndex >= maxStep)
+    {
+        axis1.move();
+        axis2.move();
+        axis3.move();
+        axis4.move();
+        axis5.move();
+        axis6.move();
+        runProg = false;
+    }
+    
+
+    /*
     // TODO: non blocking
     delayMicroseconds(PULSE_SPEED_2 + acceleration);
     if (runIndex < maxStep && delayState == true )
@@ -712,6 +791,7 @@ void run()
         axis6.move();
         runProg = false;
     }
+    */
 }
 
 
