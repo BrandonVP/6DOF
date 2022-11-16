@@ -220,38 +220,37 @@ void controller(CAN_Frame buffer)
     sprintf(msgOut, "%3X  %2X %2X %2X %2X %2X %2X %2X %2X", buffer.id, buffer.data[0], buffer.data[1], buffer.data[2], buffer.data[3], buffer.data[4], buffer.data[5], buffer.data[6], buffer.data[7]);
     Serial.println(msgOut);
 #endif
-    // RX Command List
-    #define CRC_BYTE                0x07 // For CONTROL and MANUAL
+    // ** RX Command List ** //
+   
+    // These are fixed bytes that can not be used for anything else
     #define COMMAND_BYTE            0x01
-    #define ACCELERATION_BYTE       0x02
-    #define SPEED_BYTE              0x03
-    #define LOOP_BYTE               0x04
     #define SUB_COMMAND_BYTE        0x05
-    #define GRIP_BYTE               0x06
-    #define SET_MIN_BYTE            0x02
-    #define SET_SEC_BYTE            0x03
+    #define CRC_BYTE                0x07 // For CONTROL and MANUAL
 
     // List of commands for the COMMAND_BYTE
     #define SEND_AXIS_POSITIONS     0x61
     #define RESET_AXIS_POSITION     0x62
     #define HOME_AXIS_POSITION      0x63
+
+    #define GRIP_BYTE               0x06
     #define MOVE_GRIP               0x6A
     #define HOLD_GRIP               0x00
     #define OPEN_GRIP               0x01
     #define SHUT_GRIP               0x11
+
     #define SET_WAIT_TIMER          0x6B
+    #define SET_MIN_BYTE            0x02
+    #define SET_SEC_BYTE            0x03
+    #define SET_MS_BYTE             0x04
 
     #define EXECUTE_PROGRAM         0x1E // Execute Steps
     #define STOP_PROGRAM            0x0E // Stop Steps
+    #define ACCELERATION_BYTE       0x02
+    #define SPEED_BYTE              0x03
+    #define LOOP_BYTE               0x04
 
     #define CONFIRMATION            0x1C // Confirm message received
     #define NEG_CONFIRMATION        0x0C // Confirm message not received or failed CRC
-
-#if defined DEBUG_CONTROLLER
-    char crcOut[80];
-    sprintf(crcOut, "%3d == %3d", buffer.data[CRC_BYTE], generateCRC(buffer.data, 7));
-    Serial.println(msgOut);
-#endif
 
     // Used for return confirmation
     byte returnData[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -307,8 +306,15 @@ void controller(CAN_Frame buffer)
         ===========================================================*/
         if (buffer.data[COMMAND_BYTE] == SET_WAIT_TIMER)
         {
+            uint8_t ms = buffer.data[SET_MS_BYTE];
             uint8_t seconds = buffer.data[SET_SEC_BYTE];
             uint8_t minutes = buffer.data[SET_MIN_BYTE];
+            uint32_t tt = millis() + (seconds * 1000);
+            Serial.print("seconds: ");
+            Serial.println(seconds);
+            while (millis() < tt)
+            {
+            }
         }
         /*=========================================================
                     Open/Close Grip
@@ -327,8 +333,8 @@ void controller(CAN_Frame buffer)
         /*=========================================================
                     Executes Program Move
         ===========================================================*/
-        // |        ID       |  data[0] |   data[1]    |      data[2]      |   data[3]  |   data[4]
-        // | EXECUTE_PROGRAM | CRC_BYTE | COMMAND_BYTE | ACCELERATION_BYTE | SPEED_BYTE |  LOOP_BYTE
+        // |        ID       |  data[0] |   data[1]    |      data[2]      |   data[3]  |   data[4]  |    data[5]   |  data[6]  |  data[7] |
+        // | EXECUTE_PROGRAM | CRC_BYTE | COMMAND_BYTE | ACCELERATION_BYTE | SPEED_BYTE |  LOOP_BYTE | Opt. Sub CMD | Sub data  |   CRC    |
 
         if (buffer.data[COMMAND_BYTE] == EXECUTE_PROGRAM)
         {
@@ -973,13 +979,13 @@ void setup()
     initCRC();
 }
 
-#if defined DEBUG_CANBUS
-uint32_t CANBusDebugTimer = 0;
-uint32_t count1 = 0;
-#endif
+// 
 void CANBus_Debug()
 {
-    #if defined DEBUG_CANBUS
+#if defined DEBUG_CANBUS
+    static uint32_t CANBusDebugTimer = 0;
+    static uint32_t count1 = 0;
+
     const uint8_t TEC_error_register = 0x1C;
     const uint8_t REC_error_register = 0x1D;
     const uint8_t error_register = 0x1D;
@@ -1007,39 +1013,6 @@ void CANBus_Debug()
         Serial.print("Stack Size: ");
         Serial.println(myStack.stack_size());
 
-        /*
-        if (result1)
-        {
-            Serial.println("");
-            Serial.println("RESETING ERROR");
-            Serial.println(CAN0.getError());
-            CAN0.mcp2515_setRegister(0x2D, 0x0);
-            Serial.println(CAN0.getError());
-            Serial.println("RESETING ERROR");
-            Serial.println("");
-        }
-        if (result2)
-        {
-            Serial.println("");
-            Serial.println("RESETING RX");
-            Serial.println(CAN0.getError());
-            CAN0.mcp2515_setRegister(0x1D, 0x0);
-            Serial.println(CAN0.getError());
-            Serial.println("RESETING RX");
-            Serial.println("");
-        }
-
-        if (result3)
-        {
-            Serial.println("");
-            Serial.println("RESETING TX");
-            Serial.println(CAN0.getError());
-            CAN0.mcp2515_setRegister(0x1C, 0x0);
-            Serial.println(CAN0.getError());
-            Serial.println("RESETING TX");
-            Serial.println("");
-        }
-        */
         CANBusDebugTimer = millis();
     }
 #endif
