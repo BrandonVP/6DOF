@@ -19,6 +19,7 @@
 - Implement wireless estop
 - Redesign Run
 
+- *** Execute move command without a postion to move to sets all axis to 0 ***
 ===========================================================
     End Todo List
 =========================================================*/
@@ -220,11 +221,10 @@ void controller(CAN_Frame buffer)
     sprintf(msgOut, "%3X  %2X %2X %2X %2X %2X %2X %2X %2X", buffer.id, buffer.data[0], buffer.data[1], buffer.data[2], buffer.data[3], buffer.data[4], buffer.data[5], buffer.data[6], buffer.data[7]);
     Serial.println(msgOut);
 #endif
-    // ** RX Command List ** //
-   
+
     // These are fixed bytes that can not be used for anything else
-    #define COMMAND_BYTE            0x01
-    #define SUB_COMMAND_BYTE        0x05
+    #define COMMAND_BYTE            0x00
+    #define SUB_COMMAND_BYTE        0x04
     #define CRC_BYTE                0x07 // For CONTROL and MANUAL
 
     // List of commands for the COMMAND_BYTE
@@ -232,23 +232,24 @@ void controller(CAN_Frame buffer)
     #define RESET_AXIS_POSITION     0x62
     #define HOME_AXIS_POSITION      0x63
 
-    #define GRIP_BYTE               0x06
+    #define MOVE_GRIP_BYTE          0x05
     #define MOVE_GRIP               0x6A
     #define HOLD_GRIP               0x00
     #define OPEN_GRIP               0x01
     #define SHUT_GRIP               0x11
 
     #define SET_WAIT_TIMER          0x6B
-    #define SET_MIN_BYTE            0x02
-    #define SET_SEC_BYTE            0x03
-    #define SET_MS_BYTE             0x04
+    #define SET_WAIT_MIN_BYTE       0x01
+    #define SET_WAIT_SEC_BYTE       0x02
+    #define SET_WAIT_MS_BYTE        0x03
 
     #define EXECUTE_PROGRAM         0x1E // Execute Steps
     #define STOP_PROGRAM            0x0E // Stop Steps
-    #define ACCELERATION_BYTE       0x02
-    #define SPEED_BYTE              0x03
-    #define LOOP_BYTE               0x04
+    #define ACCELERATION_BYTE       0x01
+    #define SPEED_BYTE              0x02
+    #define LOOP_BYTE               0x03
 
+    #define CONFIRMATION_BYTE       0x01
     #define CONFIRMATION            0x1C // Confirm message received
     #define NEG_CONFIRMATION        0x0C // Confirm message not received or failed CRC
 
@@ -306,9 +307,9 @@ void controller(CAN_Frame buffer)
         ===========================================================*/
         if (buffer.data[COMMAND_BYTE] == SET_WAIT_TIMER)
         {
-            uint8_t ms = buffer.data[SET_MS_BYTE];
-            uint8_t seconds = buffer.data[SET_SEC_BYTE];
-            uint8_t minutes = buffer.data[SET_MIN_BYTE];
+            uint8_t ms = buffer.data[SET_WAIT_MS_BYTE];
+            uint8_t seconds = buffer.data[SET_WAIT_SEC_BYTE];
+            uint8_t minutes = buffer.data[SET_WAIT_MIN_BYTE];
             uint32_t tt = millis() + (seconds * 1000);
             Serial.print("seconds: ");
             Serial.println(seconds);
@@ -321,11 +322,11 @@ void controller(CAN_Frame buffer)
         ===========================================================*/
         if ((buffer.data[COMMAND_BYTE] == MOVE_GRIP) || (SUB_COMMAND_BYTE == MOVE_GRIP))
         {
-            if (buffer.data[GRIP_BYTE] == OPEN_GRIP)
+            if (buffer.data[MOVE_GRIP_BYTE] == OPEN_GRIP)
             {
                 open_grip();
             }
-            if (buffer.data[GRIP_BYTE] == SHUT_GRIP)
+            if (buffer.data[MOVE_GRIP_BYTE] == SHUT_GRIP)
             {
                 close_grip();
             }
@@ -333,8 +334,8 @@ void controller(CAN_Frame buffer)
         /*=========================================================
                     Executes Program Move
         ===========================================================*/
-        // |        ID       |  data[0] |   data[1]    |      data[2]      |   data[3]  |   data[4]  |    data[5]   |  data[6]  |  data[7] |
-        // | EXECUTE_PROGRAM | CRC_BYTE | COMMAND_BYTE | ACCELERATION_BYTE | SPEED_BYTE |  LOOP_BYTE | Opt. Sub CMD | Sub data  |   CRC    |
+        // |        ID       |    data[0]   |     data[1]       |   data[2]  |  data[3]  |     data[4]      | data[5] | data[6] | data[7]  |
+        // | EXECUTE_PROGRAM | COMMAND_BYTE | ACCELERATION_BYTE | SPEED_BYTE | LOOP_BYTE | SUB_COMMAND_BYTE | SUB_CMD | SUB_CMD | CRC_BYTE |
 
         if (buffer.data[COMMAND_BYTE] == EXECUTE_PROGRAM)
         {
@@ -358,8 +359,8 @@ void controller(CAN_Frame buffer)
         //|  0  |  1   |   2   |   3   |   4   |   5   |   6   |   7   |
         //| 0-7 | 8-15 | 16-23 | 24-31 | 32-39 | 40-47 | 48-55 | 56-63 |
 
-        //|  crc  |  grip |   a6   |   a5   |   a4   |   a3   |   a2   |   a1   |
-        //|  0-4  |  5-9  |  10-18 |  19-27 |  28-36 |  37-45 |  46-54 |  55-63 |
+        //|  grip |   a6   |   a5   |   a4   |   a3   |   a2   |   a1   |   crc   |
+        //|  0-1  |  2-10  |  11-19 |  20-28 |  29-37 |  38-46 |  47-55 |  56-64  |
         a1 = ((buffer.data[5] & 0x01) << 8)   | buffer.data[6];
         a2 = (((buffer.data[4] & 0x03)) << 7) | (buffer.data[5] >> 1);
         a3 = (((buffer.data[3] & 0x07)) << 6) | (buffer.data[4] >> 2);
