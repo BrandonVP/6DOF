@@ -125,7 +125,6 @@
     <ClInclude Include="can_buffer.h" />
     <ClInclude Include="ch1.h" />
     <ClInclude Include="ch2.h" />
-    <ClInclude Include="common.h" />
     <ClInclude Include="__vm\.6DOF.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>

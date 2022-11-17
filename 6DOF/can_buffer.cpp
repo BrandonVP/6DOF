@@ -1,8 +1,11 @@
 /*
- Name:		buffer.c
- Created:	9/3/2021 9:36:16 PM
- Author:	Brandon Van Pelt
-*/
+ ===========================================================================
+ Name        : buffer.cpp
+ Author      : Brandon Van Pelt
+ Created	 : 9/3/2021
+ Description : Ring buffer for CAN Bus messages
+ ===========================================================================
+ */
 
 #include "can_buffer.h"
 

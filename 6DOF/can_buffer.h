@@ -1,13 +1,11 @@
 /*
- Name:		buffer.h
- Created:	9/3/2021 9:36:16 PM
- Author:	Brandon Van Pelt
-*/
-
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdbool.h>
+ ===========================================================================
+ Name        : buffer.h
+ Author      : Brandon Van Pelt
+ Created	 : 9/3/2021
+ Description : Ring buffer for CAN Bus messages
+ ===========================================================================
+ */
 
 #ifndef CAN_BUFFER_H_
 #define CAN_BUFFER_H_

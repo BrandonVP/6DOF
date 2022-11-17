@@ -1,6 +1,11 @@
-// 
-// 
-// 
+/*
+ ===========================================================================
+ Name        : Actuator.cpp
+ Author      : Brandon Van Pelt
+ Created	 : 
+ Description : Create objects to control each stepper motor axis
+ ===========================================================================
+ */
 
 #include "Actuator.h"
 

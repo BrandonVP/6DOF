@@ -1,21 +1,20 @@
 /*
- Name:		_6DOF_V2.ino
- Created:	1/10/2021 3:31:56 PM
- Author:	Brandon Van Pelt
-*/
+ ===========================================================================
+ Name        : 6DOF.cpp
+ Author      : Brandon Van Pelt
+ Created	 : 1/10/2021
+ Description : Main program file
+ ===========================================================================
+ */
 
 /*=========================================================
     Todo List
 ===========================================================
-- Document
-- Better comments and improved naming convention
 - Error / Range checking
 - Acceleration set by controller
-- Wait cmd
 
 - Design way for arm movements of different lengths to end together
 
-- Save arm positions to EEPROM
 - Implement wireless estop
 - Redesign Run
 
@@ -23,12 +22,14 @@
 ===========================================================
     End Todo List
 =========================================================*/
+
 #include <EEPROM.h>
-#include "Actuator.h"
 #include <mcp_can_dfs.h>
 #include <mcp_can.h>
-#include "pinAssignments.h"
 #include <SPI.h>
+
+#include "Actuator.h"
+#include "pinAssignments.h"
 #include "can_buffer.h"
 
 // Debug CAN Bus Connection
@@ -64,8 +65,8 @@ byte len = 0;
 byte rxBuf[8];
 
 MCP_CAN CAN0(49);
-
 // Actuator objects - (min angle, max angle, current angle)
+
 Actuator axis1(SPD_x1, DIR_x1, ENA_x1, 1, 359, axis1StartingAngle);
 Actuator axis2(SPD_y1, DIR_y1, ENA_y1, 1, 359, axis2StartingAngle);
 Actuator axis3(SPD_z1, DIR_z1, ENA_z1, 1, 359, axis3StartingAngle);
@@ -100,6 +101,12 @@ bool waitActivated = false;
 can_buffer myStack;
 CAN_Frame incoming;
 CAN_Frame buffer;
+
+#define POLYNOMIAL 0xD8  /* 11011 followed by 0's */
+#define WIDTH  (8 * sizeof(uint8_t))
+#define TOPBIT (1 << (WIDTH - 1))
+
+uint8_t  crcTable[256];
 
 // Check RAM usage
 int freeRam() {
@@ -144,28 +151,11 @@ void readMSG()
     }
 }
 
-/*
-// A very simple "CRC" generator
-uint8_t generateByteCRC(volatile uint8_t* data)
-{
-    return ((data[0] % 2) + (data[1] % 2) + (data[2] % 2) + (data[3] % 2) + (data[4] % 2) + (data[5] % 2) + (data[6] % 2) + (data[7] % 2) + 1);
-}
-*/
+
 /*=========================================================
 CRC - https://barrgroup.com/embedded-systems/how-to/crc-calculation-c-code
 ===========================================================*/
-#define POLYNOMIAL 0xD8  /* 11011 followed by 0's */
-
-/*
- * The width of the CRC calculation and result.
- * Modify the typedef for a 16 or 32-bit CRC standard.
- */
-
-#define WIDTH  (8 * sizeof(uint8_t))
-#define TOPBIT (1 << (WIDTH - 1))
-
-uint8_t  crcTable[256];
-
+// Create CRC table
 void initCRC(void)
 {
     uint8_t  remainder;
@@ -195,6 +185,7 @@ void initCRC(void)
     }
 }
 
+// All sent messages have a CRC added to data[7]
 uint8_t generateCRC(volatile uint8_t message[], int nBytes)
 {
     uint8_t data;
@@ -211,11 +202,10 @@ uint8_t generateCRC(volatile uint8_t message[], int nBytes)
     return (remainder);
 } 
 
-
-#define DEBUG_CONTROLLER
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
 {
+#define DEBUG_CONTROLLER
 #if defined DEBUG_CONTROLLER
     char msgOut[80];
     sprintf(msgOut, "%3X  %2X %2X %2X %2X %2X %2X %2X %2X", buffer.id, buffer.data[0], buffer.data[1], buffer.data[2], buffer.data[3], buffer.data[4], buffer.data[5], buffer.data[6], buffer.data[7]);
@@ -805,7 +795,6 @@ void run()
 /*=========================================================
     Axis Pos
 ===========================================================*/
-bool swap = false;
 // Update pos on a timer
 void updateAxisPos()
 {
@@ -851,24 +840,21 @@ void updateAxisPos()
 }
 
 // Save axis posistions to the EEPROM
-// Save after completed move?
 void saveAxisPositions()
 {
-    /*
-// TODO: Test and move to function
-if (millis() - updateEEPROM > 5000 && !isPositionSaved)
-{
-    Serial.println("Saving axis positions");
-    EEPROM.put(10, axis1.get_current_angle());
-    EEPROM.put(20, axis2.get_current_angle());
-    EEPROM.put(30, axis3.get_current_angle());
-    EEPROM.put(40, axis4.get_current_angle());
-    EEPROM.put(50, axis5.get_current_angle());
-    EEPROM.put(60, axis6.get_current_angle());
-    isPositionSaved = true;
+    if (millis() - updateEEPROM > 10000)
+    {
+        // Update only saves if value is changed
+        EEPROM.update(10, axis1.get_deg());
+        EEPROM.update(20, axis2.get_deg());
+        EEPROM.update(30, axis3.get_deg());
+        EEPROM.update(40, axis4.get_deg());
+        EEPROM.update(50, axis5.get_deg());
+        EEPROM.update(60, axis6.get_deg());
+        updateEEPROM = millis();
+    }
 }
-*/
-}
+
 
 /*=========================================================
     Setup and Main loop
@@ -876,27 +862,21 @@ if (millis() - updateEEPROM > 5000 && !isPositionSaved)
 // Setup device
 void setup()
 {
-    // PSU needs time to power up or Mega will hang during setup
-#if defined ARM1
-    delay(2000);
-#endif
-#if defined ARM2
-    delay(2100);
-#endif
-
     // Disable interrupts
     cli();
     Serial.begin(115200);
 
     pinMode(INT_PIN, INPUT);
 
-   
     if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
+    {
         Serial.println("MCP2515 Initialized Successfully!");
+    }
     else
+    {
         Serial.println("Error Initializing MCP2515...");
-
-
+    }
+        
 #if defined ARM1
     // Arm1
     CAN0.init_Mask(0, 0, 0x0FF00000);                // Init first mask...
@@ -951,33 +931,25 @@ void setup()
     pinMode(MOTOR_IN1, OUTPUT);
     pinMode(MOTOR_IN2, OUTPUT);
 
-    // The interrupt makes movements very choppy
+    // Incomming message interrupt
     attachInterrupt(digitalPinToInterrupt(INT_PIN), MSGBuff, FALLING);
 
     CAN0.sendFlag = true;
-    // Enable interrupts
-    sei();
-
-    /*
+  
     Serial.print("Free Memory: ");
     Serial.println(freeRam(), DEC);
-    uint16_t temp = 0;
-    EEPROM.get(10, temp);
-    axis1.set_current_angle(temp);
-    EEPROM.get(20, temp);
-    axis2.set_current_angle(temp);
-    EEPROM.get(30, temp);
-    axis3.set_current_angle(temp);
-    EEPROM.get(40, temp);
-    axis4.set_current_angle(temp);
-    EEPROM.get(50, temp);
-    axis5.set_current_angle(temp);
-    EEPROM.get(60, temp);
-    axis6.set_current_angle(temp);
-    */
-    //Serial.end();
-
+    
+    axis1.set_deg(EEPROM.read(10));
+    axis2.set_deg(EEPROM.read(20));
+    axis3.set_deg(EEPROM.read(30));
+    axis4.set_deg(EEPROM.read(40));
+    axis5.set_deg(EEPROM.read(50));
+    axis6.set_deg(EEPROM.read(60));
+    
     initCRC();
+
+    // Enable interrupts
+    sei();
 }
 
 // 
@@ -1037,4 +1009,3 @@ void loop()
     // Save current axis postions
     saveAxisPositions();
 }
-

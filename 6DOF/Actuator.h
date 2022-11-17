@@ -1,4 +1,11 @@
-// Actuator.h
+/*
+ ===========================================================================
+ Name        : Actuator.h
+ Author      : Brandon Van Pelt
+ Created	 :
+ Description : Create objects to control each stepper motor axis
+ ===========================================================================
+ */
 
 #ifndef _Actuator_h
 #define _Actuator_h
