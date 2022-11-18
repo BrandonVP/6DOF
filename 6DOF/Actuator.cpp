@@ -22,7 +22,7 @@ Actuator::Actuator(uint8_t pPin, uint8_t dPin, uint8_t ePin, uint16_t min, uint1
 // new_pos_x1 is an angle
 void Actuator::set_actuator(float new_pos_x1)
 {
-	// Is there already a move quened?
+	//Do not run if a value has already been calculated to prevent a change while running
 	if (readyToMove == true) {return;}
 
 	// Set direction
@@ -67,8 +67,10 @@ void Actuator::move()
 	readyToMove = false;
 }
 
-void Actuator::set_deg(uint16_t currentAngle) {
-	this->currentAngle = currentAngle;
+bool Actuator::set_deg(uint16_t newAngle) 
+{
+	this->currentAngle = newAngle;
+	return true;
 }
 
 bool Actuator::increment_deg() 
@@ -77,35 +79,45 @@ bool Actuator::increment_deg()
 	return true;
 }
 
-uint16_t Actuator::get_deg() {
+uint16_t Actuator::get_deg() 
+{
 	return currentAngle;
 }
 
-void Actuator::set_steps(uint32_t stepsToMove) {
+void Actuator::set_steps(uint32_t stepsToMove) 
+{
 	this->stepsToMove = stepsToMove;
 }
 
-uint32_t Actuator::get_steps() {
+uint32_t Actuator::get_steps() 
+{
 	return stepsToMove;
 }
 
 void Actuator::reduceSteps()
 {
-	stepsToMove--;
+	if (stepsToMove > 0)
+	{
+		stepsToMove--;
+	}
 }
 
-void Actuator::set_direction(bool actuatorDirection) {
+void Actuator::set_direction(bool actuatorDirection) 
+{
 	this->actuatorDirection = actuatorDirection;
 }
 
-bool Actuator::get_direction() {
+bool Actuator::get_direction() 
+{
 	return actuatorDirection;
 }
 
-void Actuator::set_enable(bool enableActuator) {
+void Actuator::set_enable(bool enableActuator) 
+{
 	this->enableActuator = enableActuator;
 }
 
-bool Actuator::get_enable() {
+bool Actuator::get_enable() 
+{
 	return enableActuator;
 }

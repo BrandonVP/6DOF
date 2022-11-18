@@ -10,13 +10,15 @@
 /*=========================================================
     Todo List
 ===========================================================
-- Error / Range checking
 - Acceleration set by controller
 
 - Design way for arm movements of different lengths to end together
 
 - Implement wireless estop
-- Redesign Run
+
+- Actuator remainder sometimes produces wrong axis degrees when calling run()
+- Instead of tracking degrees track steps as a float and convert to degrees when needed
+- This will preserve the remainder
 
 - *** Execute move command without a postion to move to sets all axis to 0 ***
 ===========================================================
@@ -429,7 +431,7 @@ void controller(CAN_Frame buffer)
         {
             axis6.set_actuator(axis6.get_deg() + (buffer.data[6]));
         }
-        if ((buffer.data[7] - 0x10) == 1)
+        if ((buffer.data[0] - 0x10) == 1)
         {
             analogWrite(MOTOR_IN2, 0);
             analogWrite(MOTOR_IN1, 160);
@@ -437,7 +439,7 @@ void controller(CAN_Frame buffer)
             analogWrite(MOTOR_IN1, 0);
             analogWrite(MOTOR_IN2, 0);
         }
-        else if (buffer.data[7] == 1)
+        else if (buffer.data[0] == 1)
         {
             analogWrite(MOTOR_IN1, 0);
             analogWrite(MOTOR_IN2, 255);
@@ -566,87 +568,115 @@ void open_grip()
 // Execute movement commands
 void run()
 {
+//#define DEBUG_RUN
     if ((eStopActivated) || (runProg == false))
     {
         return;
     }
     if (runSetup)
     {
-        maxStep = findLargest();
-        runSetup = false;
-        runIndex = 0;
         count = 0;
+        runSetup = false;
+
+        // Acceleration
+        maxStep = findLargest();
+        runIndex = 0;
+#ifdef DEBUG_RUN
+        Serial.println("ENTER");
+        Serial.print("axis1: ");
+        Serial.println(axis1.get_steps());
+        Serial.print("axis2: ");
+        Serial.println(axis2.get_steps());
+        Serial.print("axis3: ");
+        Serial.println(axis3.get_steps());
+        Serial.print("axis4: ");
+        Serial.println(axis4.get_steps());
+        Serial.print("axis5: ");
+        Serial.println(axis5.get_steps());
+        Serial.print("axis6: ");
+        Serial.println(axis6.get_steps());
+        Serial.print("count: ");
+        Serial.println(count);
+#endif
     }
 
-    if (runIndex < axis1.get_steps() || runIndex < axis2.get_steps() || runIndex < axis3.get_steps() || runIndex < axis4.get_steps() || runIndex < axis5.get_steps() || runIndex < axis6.get_steps())
+    if (axis1.get_steps() || axis2.get_steps() || axis3.get_steps() || axis4.get_steps() || axis5.get_steps() || axis6.get_steps())
     {
-        if ((runIndex < axis1.get_steps()))
+        // ** First half move **
+        (count == DEGREE_STEPS) ? count = 0 : count++;
+        if (axis1.get_steps())
         {
             digitalWrite(DIR_x1, axis1.get_direction());
             digitalWrite(SPD_x1, true);
+            axis1.reduceSteps();
             (count == 337) && (axis1.increment_deg());
         }
-        else if (runIndex == axis1.get_steps())
+        else
         {
             axis1.move();
         }
 
-        if ((runIndex < axis4.get_steps()))
-        {
-            digitalWrite(DIR_x2, axis4.get_direction());
-            digitalWrite(SPD_x2, true);
-            (count == 337) && (axis4.increment_deg());
-        }
-        else if (runIndex == axis4.get_steps())
-        {
-            axis4.move();
-        }
-
-        if (runIndex < axis2.get_steps())
+        if (axis2.get_steps())
         {
             digitalWrite(DIR_y1, axis2.get_direction());
             digitalWrite(SPD_y1, true);
+            axis2.reduceSteps();
             (count == 337) && (axis2.increment_deg());
         }
-        else if (runIndex == axis2.get_steps())
+        else
         {
             axis2.move();
         }
 
-        if (runIndex < axis5.get_steps())
-        {
-            digitalWrite(DIR_y2, axis5.get_direction());
-            digitalWrite(SPD_y2, true);
-            (count == 337) && (axis5.increment_deg());
-        }
-        else if (runIndex == axis5.get_steps())
-        {
-            axis5.move();
-        }
-
-        if (runIndex < axis3.get_steps())
+        if (axis3.get_steps())
         {
             digitalWrite(DIR_z1, axis3.get_direction());
             digitalWrite(SPD_z1, true);
+            axis3.reduceSteps();
             (count == 337) && (axis3.increment_deg());
         }
-        else if (runIndex == axis3.get_steps())
+        else
         {
             axis3.move();
         }
 
-        if (runIndex < axis6.get_steps())
+        if (axis4.get_steps())
+        {
+            digitalWrite(DIR_x2, axis4.get_direction());
+            digitalWrite(SPD_x2, true);
+            axis4.reduceSteps();
+            (count == 337) && (axis4.increment_deg());
+        }
+        else
+        {
+            axis4.move();
+        }
+
+        if (axis5.get_steps())
+        {
+            digitalWrite(DIR_y2, axis5.get_direction());
+            digitalWrite(SPD_y2, true);
+            axis5.reduceSteps();
+            (count == 337) && (axis5.increment_deg());
+        }
+        else
+        {
+            axis5.move();
+        }
+
+        if (axis6.get_steps())
         {
             digitalWrite(DIR_z2, axis6.get_direction());
             digitalWrite(SPD_z2, true);
+            axis6.reduceSteps();
             (count == 337) && (axis6.increment_deg());
         }
-        else if (runIndex == axis6.get_steps())
+        else
         {
             axis6.move();
         }
 
-
+        // ** Second half move **
         delayMicroseconds(PULSE_SPEED_1 + acceleration);
         digitalWrite(SPD_x1, false);
         digitalWrite(SPD_x2, false);
@@ -655,7 +685,6 @@ void run()
         digitalWrite(SPD_z1, false);
         digitalWrite(SPD_z2, false);
 
-        runIndex++;
         if (hasAcceleration == true)
         {
             if (acceleration > 0 && maxStep - runIndex > ANGLE_ACCELERATION) {
@@ -665,136 +694,57 @@ void run()
             {
                 acceleration++;
             }
+            runIndex++;
         }
-        delayState = true;
-        (count > 337) ? count = 0 : count++;
     }
-    if (runIndex >= maxStep)
+    else
     {
+        runProg = false;
         axis1.move();
         axis2.move();
         axis3.move();
         axis4.move();
         axis5.move();
         axis6.move();
-        runProg = false;
+
+#ifdef DEBUG_RUN
+        Serial.println("EXIT");
+        Serial.print("axis1: ");
+        Serial.println(axis1.get_steps());
+        Serial.print("axis2: ");
+        Serial.println(axis2.get_steps());
+        Serial.print("axis3: ");
+        Serial.println(axis3.get_steps());
+        Serial.print("axis4: ");
+        Serial.println(axis4.get_steps());
+        Serial.print("axis5: ");
+        Serial.println(axis5.get_steps());
+        Serial.print("axis6: ");
+        Serial.println(axis6.get_steps());
+        Serial.print("count: ");
+        Serial.println(count);
+#endif
     }
-    
-
-    /*
-    // TODO: non blocking
-    delayMicroseconds(PULSE_SPEED_2 + acceleration);
-    if (runIndex < maxStep && delayState == true )
-    {
-        if ((runIndex < axis1.get_steps()))
-        {
-            digitalWrite(DIR_x1, axis1.get_direction());
-            digitalWrite(SPD_x1, true);
-            (count == 337) && (axis1.increment_deg());
-        }
-        else if (runIndex == axis1.get_steps())
-        {
-            axis1.move();
-        }
-
-        if ((runIndex < axis4.get_steps()))
-        {
-            digitalWrite(DIR_x2, axis4.get_direction());
-            digitalWrite(SPD_x2, true);
-            (count == 337) && (axis4.increment_deg());
-        }
-        else if (runIndex == axis4.get_steps())
-        {
-            axis4.move();
-        }
-
-        if (runIndex < axis2.get_steps())
-        {
-            digitalWrite(DIR_y1, axis2.get_direction());
-            digitalWrite(SPD_y1, true);
-            (count == 337) && (axis2.increment_deg());
-        }
-        else if (runIndex == axis2.get_steps())
-        {
-            axis2.move();
-        }
-
-        if (runIndex < axis5.get_steps())
-        {
-            digitalWrite(DIR_y2, axis5.get_direction());
-            digitalWrite(SPD_y2, true);
-            (count == 337) && (axis5.increment_deg());
-        }
-        else if (runIndex == axis5.get_steps())
-        {
-            axis5.move();
-        }
-
-        if (runIndex < axis3.get_steps())
-        {
-            digitalWrite(DIR_z1, axis3.get_direction());
-            digitalWrite(SPD_z1, true);
-            (count == 337) && (axis3.increment_deg());
-        }
-        else if (runIndex == axis3.get_steps())
-        {
-            axis3.move();
-        }
-
-        if (runIndex < axis6.get_steps())
-        {
-            digitalWrite(DIR_z2, axis6.get_direction());
-            digitalWrite(SPD_z2, true);
-            (count == 337) && (axis6.increment_deg());
-        }
-        else if (runIndex == axis6.get_steps())
-        {
-            axis6.move();
-        }
-
-        delayState = false;
-    }
-    if (( runIndex < maxStep ) && ( delayState == false ))
-    {
-        delayMicroseconds(PULSE_SPEED_1 + acceleration);
-        digitalWrite(SPD_x1, false);
-        digitalWrite(SPD_x2, false);
-        digitalWrite(SPD_y1, false);
-        digitalWrite(SPD_y2, false);
-        digitalWrite(SPD_z1, false);
-        digitalWrite(SPD_z2, false);
-
-        runIndex++;
-        if (hasAcceleration == true)
-        {
-            if (acceleration > 0 && maxStep - runIndex > ANGLE_ACCELERATION) {
-                acceleration--;
-            }
-            else if (maxStep - runIndex <= ANGLE_ACCELERATION)
-            {
-                acceleration++;
-            }
-        }
-        delayState = true;
-        (count > 337) ? count = 0 : count++;
-    }
-    if(runIndex >= maxStep)
-    {
-        axis1.move();
-        axis2.move();
-        axis3.move();
-        axis4.move();
-        axis5.move();
-        axis6.move();
-        runProg = false;
-    }
-    */
 }
 
 
 /*=========================================================
     Axis Pos
 ===========================================================*/
+#define A1_HIGH_BYTE 10
+#define A1_LOW_BYTE  11
+#define A2_HIGH_BYTE 20
+#define A2_LOW_BYTE  21
+#define A3_HIGH_BYTE 30
+#define A3_LOW_BYTE  31
+#define A4_HIGH_BYTE 40
+#define A4_LOW_BYTE  41
+#define A5_HIGH_BYTE 50
+#define A5_LOW_BYTE  51
+#define A6_HIGH_BYTE 60
+#define A6_LOW_BYTE  61
+#define MAX_SAVED_DEGREE 361
+
 // Update pos on a timer
 void updateAxisPos()
 {
@@ -845,16 +795,38 @@ void saveAxisPositions()
     if (millis() - updateEEPROM > 10000)
     {
         // Update only saves if value is changed
-        EEPROM.update(10, axis1.get_deg());
-        EEPROM.update(20, axis2.get_deg());
-        EEPROM.update(30, axis3.get_deg());
-        EEPROM.update(40, axis4.get_deg());
-        EEPROM.update(50, axis5.get_deg());
-        EEPROM.update(60, axis6.get_deg());
+        EEPROM.put(A1_HIGH_BYTE, (byte)(axis1.get_deg() & 0xFF));
+        EEPROM.put(A1_LOW_BYTE, (byte)((axis1.get_deg() >> 8) & 0xFF));
+        EEPROM.put(A2_HIGH_BYTE, (byte)(axis2.get_deg() & 0xFF));
+        EEPROM.put(A2_LOW_BYTE, (byte)((axis2.get_deg() >> 8) & 0xFF));
+        EEPROM.put(A3_HIGH_BYTE, (byte)(axis3.get_deg() & 0xFF));
+        EEPROM.put(A3_LOW_BYTE, (byte)((axis3.get_deg() >> 8) & 0xFF));
+        EEPROM.put(A4_HIGH_BYTE, (byte)(axis4.get_deg() & 0xFF));
+        EEPROM.put(A4_LOW_BYTE, (byte)((axis4.get_deg() >> 8) & 0xFF));
+        EEPROM.put(A5_HIGH_BYTE, (byte)(axis5.get_deg() & 0xFF));
+        EEPROM.put(A5_LOW_BYTE, (byte)((axis5.get_deg() >> 8) & 0xFF));
+        EEPROM.put(A6_HIGH_BYTE, (byte)(axis6.get_deg() & 0xFF));
+        EEPROM.put(A6_LOW_BYTE, (byte)((axis6.get_deg() >> 8) & 0xFF));
         updateEEPROM = millis();
     }
 }
 
+// Load saved axis angles from EEPROM
+void loadSavedAxisPosition()
+{
+    uint16_t loadA1 = EEPROM.read(A1_HIGH_BYTE) + (EEPROM.read(A1_LOW_BYTE) << 8);
+    (loadA1 < MAX_SAVED_DEGREE) && (axis1.set_deg(loadA1));
+    uint16_t loadA2 = EEPROM.read(A2_HIGH_BYTE) + (EEPROM.read(A2_LOW_BYTE) << 8);
+    (loadA2 < MAX_SAVED_DEGREE) && (axis2.set_deg(loadA2));
+    uint16_t loadA3 = EEPROM.read(A3_HIGH_BYTE) + (EEPROM.read(A3_LOW_BYTE) << 8);
+    (loadA3 < MAX_SAVED_DEGREE) && axis3.set_deg(loadA3);
+    uint16_t loadA4 = EEPROM.read(A4_HIGH_BYTE) + (EEPROM.read(A4_LOW_BYTE) << 8);
+    (loadA4 < MAX_SAVED_DEGREE) && axis4.set_deg(loadA4);
+    uint16_t loadA5 = EEPROM.read(A5_HIGH_BYTE) + (EEPROM.read(A5_LOW_BYTE) << 8);
+    (loadA5 < MAX_SAVED_DEGREE) && axis5.set_deg(loadA5);
+    uint16_t loadA6 = EEPROM.read(A6_HIGH_BYTE) + (EEPROM.read(A6_LOW_BYTE) << 8);
+    (loadA6 < MAX_SAVED_DEGREE) && axis6.set_deg(loadA6);
+}
 
 /*=========================================================
     Setup and Main loop
@@ -939,13 +911,8 @@ void setup()
     Serial.print("Free Memory: ");
     Serial.println(freeRam(), DEC);
     
-    axis1.set_deg(EEPROM.read(10));
-    axis2.set_deg(EEPROM.read(20));
-    axis3.set_deg(EEPROM.read(30));
-    axis4.set_deg(EEPROM.read(40));
-    axis5.set_deg(EEPROM.read(50));
-    axis6.set_deg(EEPROM.read(60));
-    
+    loadSavedAxisPosition();
+
     initCRC();
 
     // Enable interrupts

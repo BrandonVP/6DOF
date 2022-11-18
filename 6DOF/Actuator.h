@@ -24,6 +24,7 @@
 #define STEPS_PER_DEGREE 337.777      //(DRIVER_STEPS * STEPS_PER_ROTATION * ACTUATOR_GEAR_RATIO) / DEGREES_IN_CIRCLE;
 										  // 1/32 steps = 675.555~
 										  // 1/16 steps = 337.777~
+#define DEGREE_STEPS 337
 
 class Actuator
 {
@@ -46,7 +47,7 @@ public:
 	void move();
 	void reduceSteps();
 	void set_actuator(float);
-	void set_deg(uint16_t);
+	bool set_deg(uint16_t);
 	void set_steps(uint32_t);
 	void set_direction(bool);
 	void set_enable(bool);
