@@ -19,8 +19,11 @@
 - Actuator remainder sometimes produces wrong axis degrees when calling run()
 - Instead of tracking degrees track steps as a float and convert to degrees when needed
 - This will preserve the remainder
+- Not all steppers have same steps (calculate and correct)
 
 - *** Execute move command without a postion to move to sets all axis to 0 ***
+
+- Grip update axis postion
 ===========================================================
     End Todo List
 =========================================================*/
@@ -67,8 +70,8 @@ byte len = 0;
 byte rxBuf[8];
 
 MCP_CAN CAN0(49);
-// Actuator objects - (min angle, max angle, current angle)
 
+// Actuator objects - (min angle, max angle, current angle)
 Actuator axis1(SPD_x1, DIR_x1, ENA_x1, 1, 359, axis1StartingAngle);
 Actuator axis2(SPD_y1, DIR_y1, ENA_y1, 1, 359, axis2StartingAngle);
 Actuator axis3(SPD_z1, DIR_z1, ENA_z1, 1, 359, axis3StartingAngle);
@@ -76,24 +79,21 @@ Actuator axis4(SPD_x2, DIR_x2, ENA_x2, 1, 359, axis4StartingAngle);
 Actuator axis5(SPD_y2, DIR_y2, ENA_y2, 1, 359, axis5StartingAngle);
 Actuator axis6(SPD_z2, DIR_z2, ENA_z2, 1, 359, axis6StartingAngle);
 
+// Run() vars
 bool hasAcceleration = true;
 bool runSetup = false;
 bool runProg = false;
-bool delayState = true;
-bool isGripOpen = true;
 volatile bool eStopActivated = false;
-
-// Run() vars
 uint16_t count = 0;
 uint16_t acceleration = 0;  
 uint32_t maxStep = 0;
-volatile uint32_t runIndex = 0;
+uint32_t runIndex = 0;
 
 // Timer for current angle updates
 uint32_t timer = 0;
 
+// EEPROM update timer
 uint32_t updateEEPROM = 0;
-bool isPositionSaved = false;
 
 // Wait function variables
 uint32_t waitTimer = 0;
@@ -125,6 +125,7 @@ void MSGBuff()
 {
      // Read incoming message
     CAN0.readMsgBuf(&rxId, &len, rxBuf);
+
     // TODO: Implement this code
     /*
     // Estop check
@@ -140,13 +141,14 @@ void MSGBuff()
         }
     }
     */
+
     myStack.push(rxId, rxBuf);
 }
 
 // Read and execute messages from buffer
 void readMSG()
 {
-    if (runProg == false && myStack.stack_size() > 0)
+    if ((myStack.stack_size() > 0) && (runProg == false))
     {
         myStack.pop(&buffer);
         controller(buffer);
@@ -207,7 +209,7 @@ uint8_t generateCRC(volatile uint8_t message[], int nBytes)
 // Process incoming CAN Frames
 void controller(CAN_Frame buffer)
 {
-#define DEBUG_CONTROLLER
+//#define DEBUG_CONTROLLER
 #if defined DEBUG_CONTROLLER
     char msgOut[80];
     sprintf(msgOut, "%3X  %2X %2X %2X %2X %2X %2X %2X %2X", buffer.id, buffer.data[0], buffer.data[1], buffer.data[2], buffer.data[3], buffer.data[4], buffer.data[5], buffer.data[6], buffer.data[7]);
@@ -303,8 +305,7 @@ void controller(CAN_Frame buffer)
             uint8_t seconds = buffer.data[SET_WAIT_SEC_BYTE];
             uint8_t minutes = buffer.data[SET_WAIT_MIN_BYTE];
             uint32_t tt = millis() + (seconds * 1000);
-            Serial.print("seconds: ");
-            Serial.println(seconds);
+            // TODO: Determine how the wait timer should be implemented
             while (millis() < tt)
             {
             }
@@ -599,83 +600,79 @@ void run()
         Serial.println(count);
 #endif
     }
-
     if (axis1.get_steps() || axis2.get_steps() || axis3.get_steps() || axis4.get_steps() || axis5.get_steps() || axis6.get_steps())
     {
         // ** First half move **
-        (count == DEGREE_STEPS) ? count = 0 : count++;
-        if (axis1.get_steps())
+        // 
+        // Count steps up to 1 degree to increment current axis positions
+        (count == 377) ? count = 0 : count++;
+
+        if (axis1.get_steps() > 0)
         {
             digitalWrite(DIR_x1, axis1.get_direction());
             digitalWrite(SPD_x1, true);
             axis1.reduceSteps();
-            (count == 337) && (axis1.increment_deg());
+            (count == 100) && (axis1.addSteps(count));
         }
         else
         {
             axis1.move();
         }
-
-        if (axis2.get_steps())
+        if (axis2.get_steps() > 0)
         {
             digitalWrite(DIR_y1, axis2.get_direction());
             digitalWrite(SPD_y1, true);
             axis2.reduceSteps();
-            (count == 337) && (axis2.increment_deg());
+            (count == 100) && (axis2.addSteps(count));
         }
         else
         {
             axis2.move();
         }
-
-        if (axis3.get_steps())
+        if (axis3.get_steps() > 0)
         {
             digitalWrite(DIR_z1, axis3.get_direction());
             digitalWrite(SPD_z1, true);
             axis3.reduceSteps();
-            (count == 337) && (axis3.increment_deg());
+            (count == 100) && (axis3.addSteps(count));
         }
         else
         {
             axis3.move();
         }
-
-        if (axis4.get_steps())
+        if (axis4.get_steps() > 0)
         {
             digitalWrite(DIR_x2, axis4.get_direction());
             digitalWrite(SPD_x2, true);
             axis4.reduceSteps();
-            (count == 337) && (axis4.increment_deg());
+            (count == 100) && (axis4.addSteps(count));
         }
         else
         {
             axis4.move();
         }
-
-        if (axis5.get_steps())
+        if (axis5.get_steps() > 0)
         {
             digitalWrite(DIR_y2, axis5.get_direction());
             digitalWrite(SPD_y2, true);
             axis5.reduceSteps();
-            (count == 337) && (axis5.increment_deg());
+            (count == 100) && (axis5.addSteps(count));
         }
         else
         {
             axis5.move();
         }
-
-        if (axis6.get_steps())
+        if (axis6.get_steps() > 0)
         {
             digitalWrite(DIR_z2, axis6.get_direction());
             digitalWrite(SPD_z2, true);
             axis6.reduceSteps();
-            (count == 337) && (axis6.increment_deg());
+            (count == 100) && (axis6.addSteps(count));
         }
         else
         {
             axis6.move();
         }
-
         // ** Second half move **
         delayMicroseconds(PULSE_SPEED_1 + acceleration);
         digitalWrite(SPD_x1, false);
@@ -758,10 +755,7 @@ void updateAxisPos()
         uint16_t a4 = axis4.get_deg();
         uint16_t a5 = axis5.get_deg();
         uint16_t a6 = axis6.get_deg();
-
-        // TODO: Add grip value after the grip function is updated
         uint8_t grip = 0;
-        uint8_t crc = (a1 % 2) + (a2 % 2) + (a3 % 2) + (a4 % 2) + (a5 % 2) + (a6 % 2) + (grip % 2) + 1;
 
         data[6] = (a1 & 0xFF);
         data[5] = (a1 >> 8);
@@ -783,9 +777,10 @@ void updateAxisPos()
         {
             CAN0.mcp2515_set_tx_flag_status();
             CAN0.sendMsgBuf(TXID_POSITION, 0, 8, data);
-            timer = millis();
         }
         sei();
+
+        timer = millis();
     }
 }
 
@@ -842,11 +837,11 @@ void setup()
 
     if (CAN0.begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
     {
-        Serial.println("MCP2515 Initialized Successfully!");
+        Serial.println(F("MCP2515 Initialized Successfully!"));
     }
     else
     {
-        Serial.println("Error Initializing MCP2515...");
+        Serial.println(F("Error Initializing MCP2515..."));
     }
         
 #if defined ARM1
@@ -908,7 +903,7 @@ void setup()
 
     CAN0.sendFlag = true;
   
-    Serial.print("Free Memory: ");
+    Serial.print(F("Free Memory: "));
     Serial.println(freeRam(), DEC);
     
     loadSavedAxisPosition();
@@ -919,7 +914,7 @@ void setup()
     sei();
 }
 
-// 
+// Check for CAN Bus hardware related errors
 void CANBus_Debug()
 {
 #if defined DEBUG_CANBUS
@@ -967,12 +962,12 @@ void loop()
     // Check if there are any CAN Bus messages in the buffer
     readMSG();
 
-    // Send out the current actuator angles
+    // Send out the current axis angles
     updateAxisPos();
 
-    // Execute current commands
+    // Execute movement commands
     run();
 
-    // Save current axis postions
+    // Save current axis postions to EEPROM if values change
     saveAxisPositions();
 }

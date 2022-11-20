@@ -9,6 +9,7 @@
 
 #include "Actuator.h"
 
+// Default constructor
 Actuator::Actuator(uint8_t pPin, uint8_t dPin, uint8_t ePin, uint16_t min, uint16_t max, uint16_t startingAngle)
 {
 	pulsePin = pPin;
@@ -17,54 +18,78 @@ Actuator::Actuator(uint8_t pPin, uint8_t dPin, uint8_t ePin, uint16_t min, uint1
 	minAngle = min;
 	maxAngle = max;
 	currentAngle = startingAngle;
+	nextAngle = currentAngle;
+	currentSteps = startingAngle * STEPS_PER_DEGREE;
+	nextSteps = currentSteps;
 }
 
-// new_pos_x1 is an angle
-void Actuator::set_actuator(float new_pos_x1)
+// Calculate steps needed to reach next angle command
+void Actuator::set_actuator(uint32_t newAngle)
 {
-	//Do not run if a value has already been calculated to prevent a change while running
-	if (readyToMove == true) {return;}
+	// Block a set if run is already active to prevent changing steps mid run and range check incoming value
+	if (readyToMove == true || newAngle > 360 || newAngle < 1) { return; }
+
+	// Convert degrees to steps
+	uint32_t newSteps = newAngle * STEPS_PER_DEGREE;
+
+	// Set actuator to new currentAngle once move is complete
+	nextSteps = newSteps;
+	nextAngle = newAngle;
 
 	// Set direction
-	(new_pos_x1 < currentAngle) ? actuatorDirection = false : actuatorDirection = true;
+	(newSteps < currentSteps) ? actuatorDirection = false : actuatorDirection = true;
 
 	// Check min and max. If reached the movement value will be changes to either min or max 
 	// that way the program will still run but not exceed the max or min angle.
-	if ((actuatorDirection) && (currentAngle - new_pos_x1 != 0) && (new_pos_x1 > this->maxAngle))
+	/*
+	if ((actuatorDirection) && (newAngle > MAX_DEGREES_IN_STEPS))
 	{
-		new_pos_x1 = this->maxAngle;
+		newSteps = MAX_DEGREES_IN_STEPS;
 	}
-	else if ((currentAngle - new_pos_x1 != 0) && (new_pos_x1 < this->minAngle))
+	else if ((!actuatorDirection) && (actuatorDirection < MIN_DEGREES_IN_STEPS))
 	{
-		new_pos_x1 = this->minAngle;
+		newSteps = MIN_DEGREES_IN_STEPS;
 	}
+	*/
 
 	// Calculate distance to move
-	int dis_to_move = new_pos_x1 - currentAngle;
-
-	// Already assigned direction, find ABS
-	if (dis_to_move < 0) 
+	if (newSteps >= currentSteps)
 	{
-		dis_to_move = dis_to_move * ((dis_to_move > 0) - (dis_to_move < 0));
+		newSteps = newSteps - currentSteps;
+	}
+	else if (newSteps < currentSteps)
+	{
+		newSteps = currentSteps - newSteps;
 	}
 
-	// Convert degrees to steps
-	stepsToMove = STEPS_PER_DEGREE * dis_to_move;
+	// Assign newly calculated value
+	stepsToMove = newSteps;
 
-	// Enable if steps are greater than 0
-	(dis_to_move == 0) ? enableActuator = false : enableActuator = true;
-
-	// Set actuator to new currentAngle
-	nextAngle = new_pos_x1;
-
-	// Disables set_actuator until run is called
-	readyToMove = true;
+	if (stepsToMove > 0)
+	{
+		// Disables set_actuator until run is called
+		readyToMove = true;
+	}
 }
 
+// Set actuator to new position once move is complete
 void Actuator::move()
 {
 	currentAngle = nextAngle;
+	currentSteps = nextSteps;
 	readyToMove = false;
+}
+
+bool Actuator::addSteps(uint32_t newSteps)
+{
+	if (actuatorDirection)
+	{
+		currentSteps += newSteps;
+	}
+	else
+	{
+		currentSteps -= newSteps;
+	}
 }
 
 bool Actuator::set_deg(uint16_t newAngle) 
@@ -81,12 +106,12 @@ bool Actuator::increment_deg()
 
 uint16_t Actuator::get_deg() 
 {
-	return currentAngle;
+	return ((currentSteps / 337.7777) + 1);
 }
 
-void Actuator::set_steps(uint32_t stepsToMove) 
+void Actuator::set_steps(uint32_t newSteps) 
 {
-	this->stepsToMove = stepsToMove;
+	this->stepsToMove = newSteps;
 }
 
 uint32_t Actuator::get_steps() 

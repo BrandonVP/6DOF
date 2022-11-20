@@ -16,15 +16,25 @@
 #include "WProgram.h"
 #endif
 
-//#define STEPS_PER_ROTATION 200		  // Amount of steps needed for one NEMA stepper motor rotation
-//#define ACTUATOR_GEAR_RATIO 38		  // Gear reduction for lower actuators
-//#define ACTUATOR_GEAR_RATIO_UPPER 4  // Gear reduction for upper actuators - Needs to be determined
-//#define DRIVER_STEPS 16			  // Current driver hardware pin settings from 1 to 32. (fractions of 1/1 - 1/32)
-//#define DEGREES_IN_CIRCLE 360		  //
-#define STEPS_PER_DEGREE 337.777      //(DRIVER_STEPS * STEPS_PER_ROTATION * ACTUATOR_GEAR_RATIO) / DEGREES_IN_CIRCLE;
-										  // 1/32 steps = 675.555~
-										  // 1/16 steps = 337.777~
-#define DEGREE_STEPS 337
+// Max steps (360 degrees) = 121600
+// 180 degrees = 60800
+// 90 degrees = 30400
+
+#define STEPS_PER_ROTATION 200		 // Amount of steps needed for one NEMA stepper motor rotation
+#define ACTUATOR_GEAR_RATIO 38		 // Gear reduction for lower actuators
+#define ACTUATOR_GEAR_RATIO_UPPER 4  // Gear reduction for upper actuators - Needs to be determined
+#define DRIVER_STEPS 16			     // Current driver hardware pin settings from 1 to 32. (fractions of 1/1 - 1/32)
+#define DEGREES_IN_CIRCLE 360		 //
+#define STEPS_PER_DEGREE 337.777     // (DRIVER_STEPS * STEPS_PER_ROTATION * ACTUATOR_GEAR_RATIO) / DEGREES_IN_CIRCLE;
+									   // 1/32 steps = 675.555~
+									   // 1/16 steps = 337.777~
+#define DEGREE_STEPS 337			 // Value for updating degree steps in run
+#define STEP_TO_DEGREE 337.7777      // Converting steps back to degrees with higher accuracy prevents rounding errors
+
+#define MAX_DEGREES_IN_STEPS 121600
+#define MIN_DEGREES_IN_STEPS 0
+#define DEGREE_180_TO_STEPS 60800
+#define DEGREE_90_TO_STEPS 30400
 
 class Actuator
 {
@@ -34,9 +44,11 @@ protected:
 	uint8_t enablePin;
 	uint16_t maxAngle;
 	uint16_t minAngle;
-	float currentAngle;     
+	uint32_t currentAngle;     
+	uint32_t currentSteps;
 
-	float nextAngle = 0;	
+	uint32_t nextAngle = 0;
+	uint32_t nextSteps = 0;
 	uint32_t stepsToMove = 0;   
 	bool actuatorDirection = true;		
 	bool enableActuator = true;    
@@ -44,9 +56,10 @@ protected:
 
 public:
 	Actuator(uint8_t, uint8_t, uint8_t, uint16_t, uint16_t, uint16_t);
+	bool addSteps(uint32_t);
 	void move();
 	void reduceSteps();
-	void set_actuator(float);
+	void set_actuator(uint32_t);
 	bool set_deg(uint16_t);
 	void set_steps(uint32_t);
 	void set_direction(bool);
